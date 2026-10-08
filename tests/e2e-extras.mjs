@@ -220,6 +220,15 @@ await step("text and menu", async () => {
   await host.page.getByRole("button", { name: "Send text" }).click();
   await guest.page.getByText("https://example.com/a").first().waitFor({ timeout: 8000 });
   check("text from the sender shows on the joining device", true);
+  const long = `https://ferry.example.com/room/${"Hmw8x68lE7Wqxi3M9W1Npw".repeat(6)}#k=${"otE-R7vgJvZouXitbzf3".repeat(5)}`;
+  await host.page.getByLabel("Send text or a link").fill(long);
+  await host.page.getByRole("button", { name: "Send text" }).click();
+  await guest.page.getByText(long.slice(0, 40)).first().waitFor({ timeout: 8000 });
+  const fits = await guest.page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    return [...document.querySelectorAll("main *")].every((node) => node.getBoundingClientRect().right <= width + 1);
+  });
+  check("a long link wraps inside a phone screen", fits);
   await guest.page.getByRole("button", { name: "Open menu" }).click();
   await guest.page.getByRole("navigation", { name: "Quick links" }).getByRole("link", { name: "Compare" }).waitFor();
   check("a phone has a menu with the quick links", true);

@@ -101,7 +101,7 @@ function Row({
       <div className="flex items-start gap-3">
         <FileTile name={transfer.name} type={transfer.type} done={transfer.status === "done"} />
         <div className="min-w-0 flex-1">
-          <p className="flex items-start gap-1.5 break-words font-semibold leading-snug text-sea-deep">
+          <p className="flex items-start gap-1.5 font-semibold leading-snug text-sea-deep [overflow-wrap:anywhere]">
             <Icon size={15} className="mt-1 flex-none text-ink" aria-label={transfer.direction === "out" ? "Sending" : "Receiving"} />
             <span className="min-w-0">
               {folder && <span className="font-normal text-ink/80">{folder}</span>}
@@ -343,13 +343,13 @@ export function TransferPanel(props: Props) {
         : "";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       {dragging && (
         <div className="pointer-events-none fixed inset-3 z-40 grid place-items-center rounded-[40px] border-2 border-dashed border-sea bg-lilac/90">
           <p className="serif text-4xl !font-bold text-sea-deep">Drop to send</p>
         </div>
       )}
-      <section aria-label="Send">
+      <section aria-label="Send" className="min-w-0">
         <Dropzone
           compact
           onFiles={props.onFiles}
@@ -404,7 +404,7 @@ export function TransferPanel(props: Props) {
                         ? "Sending. It goes as soon as the other device is connected."
                         : "You sent, delivered"}
                   </p>
-                  <p className="mt-1 whitespace-pre-wrap break-words">{note.text}</p>
+                  <p className="mt-1 max-h-56 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere]">{note.text}</p>
                   <div className="mt-2 flex gap-2">
                     <Button
                       size="sm"
@@ -436,7 +436,7 @@ export function TransferPanel(props: Props) {
         )}
       </section>
 
-      <section aria-label="Transfers">
+      <section aria-label="Transfers" className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-3xl">Transfers</h2>
           <div className="flex flex-wrap items-center gap-3">
@@ -485,7 +485,7 @@ export function TransferPanel(props: Props) {
                 <div className="flex items-start gap-3">
                   <FileTile name={file.name} type={file.type} />
                   <div className="min-w-0 flex-1">
-                    <p className="break-words font-semibold leading-snug text-sea-deep">
+                    <p className="font-semibold leading-snug text-sea-deep [overflow-wrap:anywhere]">
                       {file.path?.includes("/") && (
                         <span className="font-normal text-ink/80">
                           {file.path.slice(0, file.path.lastIndexOf("/") + 1)}
