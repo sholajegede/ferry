@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { site } from "@/lib/site";
+import { Suspense } from "react";
 import { SendButton } from "./home-actions";
+import { MobileMenu } from "./mobile-menu";
 
 export function Mark({ size = 28 }: { size?: number }) {
   return (
@@ -57,6 +59,9 @@ export function SiteHeader() {
               Receive files
             </Link>
             <SendButton tone="nav" />
+            <Suspense fallback={null}>
+              <MobileMenu />
+            </Suspense>
           </div>
         </div>
       </header>

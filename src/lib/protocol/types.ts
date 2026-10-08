@@ -42,6 +42,7 @@ export type ControlMessage =
   | { t: "received"; id: string }
   | { t: "cancel"; id: string }
   | { t: "note"; id: string; text: string }
+  | { t: "note-ack"; id: string }
   | { t: "pair-ask" }
   | { t: "pair-yes" }
   | { t: "pair-no" };
@@ -77,6 +78,7 @@ export type NoteView = {
   direction: "out" | "in";
   text: string;
   at: number;
+  delivered?: boolean;
 };
 
 export type Route = "lan" | "direct" | "relay";
@@ -99,6 +101,7 @@ export type PeerEvent =
   | { type: "sent"; meta: FileMeta }
   | { type: "received"; meta: FileMeta }
   | { type: "note"; note: NoteView }
+  | { type: "note-delivered"; id: string }
   | { type: "pair-ask" }
   | { type: "pair-yes" }
   | { type: "pair-no" }

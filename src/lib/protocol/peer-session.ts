@@ -22,8 +22,8 @@ const ACK_INTERVAL_MS = 150;
 const MAX_MESSAGE = 256 * 1024;
 const MIN_MESSAGE = 16 * 1024;
 const MAX_NOTE_LENGTH = 20_000;
-const PING_MS = 3_000;
-const STALE_MS = 12_000;
+const PING_MS = 4_000;
+const STALE_MS = 30_000;
 const MAX_FILE_BYTES = 2 ** 44;
 const ID_PATTERN = /^[A-Za-z0-9_-]{16,32}$/;
 
@@ -136,6 +136,9 @@ export class PeerSession {
   private opened = false;
   private failures = 0;
   private heardAt = 0;
+  private tickedAt = 0;
+  private notesOut = new Map<string, string>();
+  private notesSeen = new Set<string>();
   private pinger: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -177,9 +180,14 @@ export class PeerSession {
     } catch {}
     channel.onbufferedamountlow = () => this.wake();
     this.heardAt = Date.now();
+    this.tickedAt = Date.now();
     this.pinger = setInterval(() => {
       if (this.channel !== channel) return;
-      if (Date.now() - this.heardAt > STALE_MS) this.options.stale?.();
+      const now = Date.now();
+      // A late tick means this device was asleep or in the background, so silence proves nothing yet.
+      if (now - this.tickedAt > PING_MS * 2.5) this.heardAt = now;
+      this.tickedAt = now;
+      if (now - this.heardAt > STALE_MS) this.options.stale?.();
       else this.control({ t: "ping" });
     }, PING_MS);
     channel.onmessage = (event) => {
@@ -191,6 +199,7 @@ export class PeerSession {
         .catch(() => undefined);
     };
     this.control({ t: "hello", name: this.options.selfName });
+    for (const [id, text] of this.notesOut) this.control({ t: "note", id, text });
     this.reoffer();
     this.options.changed();
   }
@@ -256,10 +265,11 @@ export class PeerSession {
 
   sendNote(text: string): NoteView | null {
     const trimmed = text.slice(0, MAX_NOTE_LENGTH);
-    if (!trimmed.trim() || !this.connected) return null;
+    if (!trimmed.trim()) return null;
     const id = randomId(9);
+    this.notesOut.set(id, trimmed);
     this.control({ t: "note", id, text: trimmed });
-    return { id, peerId: this.peerId, direction: "out", text: trimmed, at: Date.now() };
+    return { id, peerId: this.peerId, direction: "out", text: trimmed, at: Date.now(), delivered: false };
   }
 
   askToPair() {
@@ -681,6 +691,9 @@ export class PeerSession {
       }
       case "note": {
         if (typeof message.text !== "string" || typeof message.id !== "string") break;
+        this.control({ t: "note-ack", id: message.id });
+        if (this.notesSeen.has(message.id)) break;
+        this.notesSeen.add(message.id);
         this.options.emit({
           type: "note",
           note: {
@@ -693,6 +706,10 @@ export class PeerSession {
         });
         break;
       }
+      case "note-ack":
+        if (typeof message.id === "string" && this.notesOut.delete(message.id))
+          this.options.emit({ type: "note-delivered", id: message.id });
+        break;
       case "pair-ask":
         this.options.emit({ type: "pair-ask" });
         break;

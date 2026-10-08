@@ -293,6 +293,10 @@ export class OfflineSession {
       sinks,
       emit: (event) => {
         if (event.type === "note") this.notes = [...this.notes, event.note];
+        if (event.type === "note-delivered")
+          this.notes = this.notes.map((note) =>
+            note.direction === "out" && note.id === event.id ? { ...note, delivered: true } : note,
+          );
         if (event.type === "received")
           for (const listener of this.arrivalListeners)
             listener(`${PEER_ID}:${event.meta.batch}`);

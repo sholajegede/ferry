@@ -382,7 +382,9 @@ export function TransferPanel(props: Props) {
                   <p className="text-xs font-semibold text-ink/80">
                     {note.direction === "in"
                       ? `From ${peerNames[note.peerId] ?? "the other device"}`
-                      : "You sent"}
+                      : note.delivered === false
+                        ? "Sending. It goes as soon as the other device is connected."
+                        : "You sent, delivered"}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap break-words">{note.text}</p>
                   <div className="mt-2 flex gap-2">

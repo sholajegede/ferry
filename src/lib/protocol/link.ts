@@ -7,9 +7,9 @@ export type IceServer = {
 };
 
 export type Signal =
-  | { gen: number; kind: "offer" | "answer"; sdp: string }
+  | { gen: number; kind: "offer" | "answer"; sdp: string; restart?: boolean }
   | { gen: number; kind: "ice"; candidate: RTCIceCandidateInit }
-  | { gen: number; kind: "retry"; cold?: boolean };
+  | { gen: number; kind: "retry"; cold?: boolean; ice?: boolean };
 
 export type LinkStatus = "connecting" | "connected" | "reconnecting";
 
@@ -24,7 +24,10 @@ type Options = {
 };
 
 const CONNECT_TIMEOUT_MS = 20_000;
-const DISCONNECT_GRACE_MS = 5_000;
+// A short gap usually heals by itself. After this long, try a new route on the same connection.
+const SETTLE_MS = 2_500;
+// If the new route does not work either, build a fresh connection.
+const REROUTE_MS = 12_000;
 
 export class Link {
   status: LinkStatus = "connecting";
@@ -40,6 +43,7 @@ export class Link {
   private stopped = false;
   private everConnected = false;
   private startedAt = 0;
+  private reroutedAt = 0;
 
   constructor(private readonly options: Options) {}
 
@@ -69,6 +73,11 @@ export class Link {
     if (this.stopped) return;
     if (signal.kind === "retry") {
       if (!this.options.initiator) return;
+      if (signal.ice) {
+        if (signal.gen === this.gen && this.pc && this.pc.connectionState !== "connected")
+          void this.reroute();
+        return;
+      }
       const settling = Date.now() - this.startedAt < 3_000;
       if (this.status !== "connected" ? !settling || !signal.cold : !!signal.cold)
         this.reconnectIn(0);
@@ -87,6 +96,16 @@ export class Link {
       return;
     }
     if (signal.kind === "offer") {
+      if (signal.restart) {
+        const pc = this.pc;
+        if (!pc || signal.gen !== this.gen) return;
+        await pc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
+        await pc.setLocalDescription(await pc.createAnswer());
+        if (this.pc !== pc || !pc.localDescription) return;
+        this.options.send({ gen: signal.gen, kind: "answer", sdp: pc.localDescription.sdp });
+        this.arm(REROUTE_MS);
+        return;
+      }
       if (signal.gen <= this.gen) return;
       this.teardown();
       this.gen = signal.gen;
@@ -162,10 +181,49 @@ export class Link {
       void this.readRoute(pc);
       this.options.onChange();
     } else if (state === "disconnected") {
+      this.settle(pc);
+    } else if (state === "failed") {
+      if (!this.everConnected || !this.tryReroute(pc)) this.recover();
+    } else if (state === "closed") {
+      this.recover();
+    }
+  }
+
+  // The route went quiet. Wait a moment, then look for a new route before giving up on the connection.
+  private settle(pc: RTCPeerConnection) {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (this.stopped || this.pc !== pc || pc.connectionState === "connected") return;
       this.status = "reconnecting";
       this.options.onChange();
-      this.arm(DISCONNECT_GRACE_MS);
-    } else if (state === "failed" || state === "closed") {
+      if (!this.tryReroute(pc)) this.recover();
+    }, SETTLE_MS);
+  }
+
+  private tryReroute(pc: RTCPeerConnection) {
+    if (typeof pc.restartIce !== "function") return false;
+    const now = Date.now();
+    if (now - this.reroutedAt < REROUTE_MS) return false;
+    this.reroutedAt = now;
+    this.status = "reconnecting";
+    this.options.onChange();
+    if (this.options.initiator) void this.reroute();
+    else this.options.send({ gen: this.gen, kind: "retry", ice: true });
+    this.arm(REROUTE_MS);
+    return true;
+  }
+
+  private async reroute() {
+    const pc = this.pc;
+    if (!pc || this.stopped) return;
+    try {
+      if (pc.signalingState !== "stable") return;
+      await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+      if (this.pc !== pc || !pc.localDescription) return;
+      this.options.send({ gen: this.gen, kind: "offer", sdp: pc.localDescription.sdp, restart: true });
+      this.arm(REROUTE_MS);
+    } catch {
       this.recover();
     }
   }

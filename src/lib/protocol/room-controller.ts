@@ -261,11 +261,12 @@ export class RoomController {
   sendNote(text: string) {
     let sent: NoteView | null = null;
     for (const peer of this.peers.values()) {
+      if (!peer.admitted) continue;
       const note = peer.peer?.sendNote(text);
       if (note && !sent) sent = note;
     }
     if (!sent) return false;
-    this.notes.push(sent);
+    this.notes = [...this.notes, sent];
     void this.options.backend
       .mutation(api.stats.track, { ...this.creds, event: "note" })
       .catch(() => undefined);
@@ -722,8 +723,15 @@ export class RoomController {
         this.emit({ type: "received", peerId: peer.id, meta: event.meta });
         break;
       case "note":
-        this.notes.push(event.note);
+        this.notes = [...this.notes, event.note];
         this.emit({ type: "note", note: event.note });
+        this.notify();
+        break;
+      case "note-delivered":
+        this.notes = this.notes.map((note) =>
+          note.direction === "out" && note.id === event.id ? { ...note, delivered: true } : note,
+        );
+        this.notify();
         break;
       case "pair-ask":
         this.emit({ type: "pair-ask", peerId: peer.id, name });

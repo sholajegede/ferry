@@ -202,6 +202,31 @@ await step("bad input", async () => {
   await guest.context.close();
 });
 
+await step("text and menu", async () => {
+  const host = await device("host");
+  const guest = await device("guest", { viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
+  await host.page.goto(base);
+  await host.page.getByRole("button", { name: "Send files", exact: true }).first().click();
+  await host.page.waitForURL(/\/room\//);
+  await guest.page.goto(host.page.url());
+  await host.page.getByText("1 device connected").waitFor();
+  await guest.page.getByLabel("Send text or a link").fill("London, UK");
+  await guest.page.getByRole("button", { name: "Send text" }).click();
+  await host.page.getByText("London, UK").waitFor({ timeout: 8000 });
+  check("text from the joining device shows on the sender with nothing else happening", true);
+  await guest.page.getByText("You sent, delivered").waitFor({ timeout: 8000 });
+  check("the device that sent the text sees it was delivered", true);
+  await host.page.getByLabel("Send text or a link").fill("https://example.com/a");
+  await host.page.getByRole("button", { name: "Send text" }).click();
+  await guest.page.getByText("https://example.com/a").first().waitFor({ timeout: 8000 });
+  check("text from the sender shows on the joining device", true);
+  await guest.page.getByRole("button", { name: "Open menu" }).click();
+  await guest.page.getByRole("navigation", { name: "Quick links" }).getByRole("link", { name: "Compare" }).waitFor();
+  check("a phone has a menu with the quick links", true);
+  await host.context.close();
+  await guest.context.close();
+});
+
 await browser.close();
 console.log(`\n${results.filter(Boolean).length} of ${results.length} checks passed`);
 process.exit(results.every(Boolean) ? 0 : 1);

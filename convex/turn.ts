@@ -32,7 +32,10 @@ export const iceServers = action({
         if (res.ok) {
           const body = (await res.json()) as { iceServers?: IceServer[] };
           if (Array.isArray(body.iceServers) && body.iceServers.length > 0)
-            return body.iceServers;
+            return body.iceServers.map((server) => ({
+              ...server,
+              urls: [server.urls].flat().filter((url) => !/:53(\?|$)/.test(url)),
+            }));
         }
       } catch {
         return STUN;
