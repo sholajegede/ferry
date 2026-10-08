@@ -39,10 +39,11 @@ Ferry is a Next.js app (App Router) with a Convex backend, plus a command line t
 - **No size cap.** The receiver writes each piece to storage as it arrives, so a 40 GB file does not have to fit in memory.
 - **End-to-end encryption.** Every piece is sealed with AES-256-GCM. The keys come from an ECDH exchange between the two devices, and both screens show the same 6-digit security code.
 - **Resume.** After a dropped connection or a page reload, a transfer continues from the last byte the receiver saved.
+- **Steady connections.** A short network gap is ignored. A longer one finds a new route on the same connection, so the transfer does not start a new handshake.
 - **Four ways to connect.** QR code, link, 6-digit code, or a list of senders on the same network.
 - **Up to 16 devices in one transfer.** A device that joins late gets the files already shared.
 - **Folders.** They keep their structure, and the receiver can save a batch as one zip.
-- **Text and links.** Paste from the clipboard, or type a note.
+- **Text and links.** Paste from the clipboard, or type a note. The sender sees when it is delivered, and undelivered text is sent again after a reconnect.
 - **Remembered devices.** Two devices that trust each other can start a transfer with one tap.
 - **Offline mode.** Two devices on the same Wi-Fi or hotspot connect by scanning each other's QR codes. No server is contacted.
 - **Installable.** Ferry installs as an app and appears in the Android share sheet.
@@ -148,7 +149,9 @@ Each frame carries a 16-byte file ID and the byte offset of its payload. The rec
 
 **Offline mode exchanges the connection details by hand.** With no server to pass messages, each device shows its WebRTC description as a QR code (or a short text code) and reads the other one. It takes one more scan than the online flow, and it works with no internet at all.
 
-**No relay by default.** Some office, school and mobile networks block direct connections. A TURN relay fixes that and costs money per gigabyte, so it is opt-in. Relayed data is still encrypted end to end.
+**A broken route is repaired before it is replaced.** When the route between two devices goes quiet, Ferry waits 2.5 seconds, because most gaps heal by themselves. Then it asks WebRTC for a new route on the same connection (an ICE restart), which keeps the data channel and the transfer alive. It builds a new connection only if that fails. A device that was asleep or in the background does not count its own sleep as silence from the other side.
+
+**The relay is opt-in.** Some office, school and mobile networks block direct connections. A TURN relay carries the encrypted data between the two devices when no direct route exists. It costs money per gigabyte, so Ferry does not include one. A public instance should add one. See "Add a relay" below.
 
 **Usage statistics without identities.** The admin page shows countries, device types and file types. Events store a visitor code that changes every day, and never a file name, a device ID or an IP address. They are deleted after 120 days.
 
@@ -228,7 +231,7 @@ The [developers page](https://ferry.sholajegede.com/developers) documents the re
 npm test
 ```
 
-This runs the protocol tests (encryption, resume, cancel, wrong key) and the backend access-control tests.
+This runs the protocol tests (encryption, resume, cancel, wrong key), the reconnect tests and the backend access-control tests.
 
 The browser tests need the bridge, a production build and a folder of test files:
 
@@ -252,6 +255,24 @@ The API is served from the site's own domain. A rewrite in `next.config.ts` forw
 
 Country and city in the admin page come from headers that Vercel and Cloudflare add. On other hosts those fields stay empty.
 
+### Add a relay
+
+Without a relay, two devices on different networks connect only when both networks allow a direct route. Phones on mobile data often do not. A relay fixes this. The data stays encrypted end to end, so the relay cannot read it.
+
+With Cloudflare Realtime TURN:
+
+1. In the Cloudflare dashboard, open Realtime, then TURN, and create a TURN key.
+2. Set the two values in the production Convex deployment:
+
+```bash
+npx convex env set CLOUDFLARE_TURN_KEY_ID "<Turn Token ID>" --prod
+npx convex env set CLOUDFLARE_TURN_API_TOKEN "<API token>" --prod
+```
+
+Ferry asks Cloudflare for short-lived credentials for each transfer. A direct route is still used when one exists, and only relayed traffic is billed. To use another TURN server, set `TURN_URLS`, `TURN_USERNAME` and `TURN_CREDENTIAL` instead.
+
+The transfer screen shows whether a connection is direct or relayed.
+
 ## Project layout
 
 | Path | Contents |
@@ -269,7 +290,7 @@ Country and city in the admin page come from headers that Vercel and Cloudflare 
 
 - Both devices must have Ferry open at the same time. Ferry stores nothing, so there is no link to download from later.
 - The receiver needs free browser storage for the whole file. Saving copies it to the download folder, so a large file needs that space twice until the browser clears the first copy.
-- With no relay configured, a transfer fails on networks that block direct connections.
+- With no relay configured, a transfer fails or keeps reconnecting on networks that block direct connections. Mobile data is the common case.
 - A remembered device must have Ferry open to get the incoming-transfer prompt. There are no push notifications.
 - "On your network now" matches devices by public IP address. On a network that many strangers share, turn it off with the checkbox on the transfer screen.
 - The privacy policy and terms describe what the code does. Have them reviewed before you run a public instance of your own.
