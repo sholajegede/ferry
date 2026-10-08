@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { SendButton } from "@/components/home-actions";
 import { checked, comparisons, findComparison } from "@/lib/compare";
 import { appId, breadcrumbs, faqPage, JsonLd, pageMeta, published } from "@/lib/seo";
@@ -19,11 +20,19 @@ export async function generateMetadata({ params }: Props) {
     description: entry.description,
     path: `/compare/${entry.slug}`,
     type: "article",
-    ownImage: true,
+    image: entry.slug,
   });
 }
 
-export default async function ComparisonPage({ params }: Props) {
+export default function ComparisonPage({ params }: Props) {
+  return (
+    <Suspense fallback={null}>
+      <Comparison params={params} />
+    </Suspense>
+  );
+}
+
+async function Comparison({ params }: Props) {
   const entry = findComparison((await params).slug);
   if (!entry) notFound();
   const path = `/compare/${entry.slug}`;
@@ -44,7 +53,7 @@ export default async function ComparisonPage({ params }: Props) {
             datePublished: published,
             dateModified: published,
             mainEntityOfPage: `${site.url}${path}`,
-            image: `${site.url}${path}/opengraph-image`,
+            image: `${site.url}/og/${entry.slug}.png`,
             author: { "@type": "Organization", name: site.name, url: site.url },
             publisher: { "@type": "Organization", name: site.name, url: site.url },
             about: [{ "@id": appId }, { "@type": "SoftwareApplication", name: entry.name }],

@@ -8,7 +8,6 @@ const convexSite = (
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
-  outputFileTracingIncludes: { "/**": ["./assets/fonts/*"] },
   partialPrefetching: true,
   turbopack: {
     rules: {

@@ -3,7 +3,7 @@ import { breadcrumbs, JsonLd, pageMeta } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata = pageMeta({
-  ownImage: true,
+  image: "offline",
   title: "Offline mode: send files with no internet",
   description:
     "Send files between two devices on the same Wi-Fi or hotspot with no internet connection. The devices connect by scanning each other's QR codes.",

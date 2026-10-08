@@ -99,6 +99,7 @@ const columns: { title: string; links: { label: string; href: string; plain?: bo
       { label: "Command line", href: "/developers" },
       { label: "HTTP API", href: "/developers#http-api" },
       { label: "Encryption", href: "/developers#encryption" },
+      { label: "Source code", href: site.repo, plain: true },
     ],
   },
   {

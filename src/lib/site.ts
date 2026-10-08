@@ -7,4 +7,5 @@ export const site = {
   operator: process.env.NEXT_PUBLIC_OPERATOR_NAME ?? "the operator of this site",
   contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "",
   cliPackage: "ferry-send",
+  repo: "https://github.com/sholajegede/ferry",
 };

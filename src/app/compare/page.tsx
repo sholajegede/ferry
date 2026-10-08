@@ -10,7 +10,7 @@ const description =
   "Honest comparisons between Ferry and the best known ways to send files, with a short answer on which one to use for the file in front of you.";
 
 export const metadata = pageMeta({
-  ownImage: true,
+  image: "compare",
   title,
   description,
   path: "/compare",
@@ -36,7 +36,7 @@ const picks = [
   },
   { need: "iPhone to Mac, side by side", pick: "AirDrop" },
   { need: "iPhone to Windows, or Android to Mac", pick: "Ferry" },
-  { need: "You want to host the software yourself", pick: "PairDrop" },
+  { need: "You want to self-host on one small server", pick: "PairDrop" },
   { need: "One home network, app installed everywhere", pick: "LocalSend" },
   { need: "No internet, nothing installed", pick: "Ferry offline mode" },
 ];

@@ -110,7 +110,7 @@ export default function HomePage() {
             isAccessibleForFree: true,
             offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
             featureList,
-            image: `${site.url}/opengraph-image`,
+            image: `${site.url}/og/home.png`,
             publisher: { "@id": organization["@id"] },
           },
           {

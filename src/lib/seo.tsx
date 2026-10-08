@@ -9,10 +9,11 @@ export function pageMeta(options: {
   path: string;
   type?: "website" | "article";
   absoluteTitle?: boolean;
-  ownImage?: boolean;
+  image?: string;
 }): Metadata {
   const share = {
-    url: options.ownImage ? `${options.path}/opengraph-image` : "/opengraph-image",
+    url: `/og/${options.image ?? "home"}.png`,
+    type: "image/png",
     width: 1200,
     height: 630,
     alt: options.title,
@@ -53,6 +54,7 @@ export const organization = {
   name: site.name,
   url: site.url,
   logo: `${site.url}/icons/icon-512.png`,
+  sameAs: [site.repo],
 };
 
 export const website = {

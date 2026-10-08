@@ -9,6 +9,14 @@ import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { FeedbackProvider } from "@/components/ui";
 import { site } from "@/lib/site";
 
+const share = {
+  url: "/og/home.png",
+  width: 1200,
+  height: 630,
+  type: "image/png",
+  alt: `${site.name}: ${site.tagline.toLowerCase()}`,
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
@@ -45,11 +53,13 @@ export const metadata: Metadata = {
     title: `${site.name}: ${site.tagline.toLowerCase()}`,
     description: site.description,
     url: "/",
+    images: [share],
   },
   twitter: {
     card: "summary_large_image",
     title: `${site.name}: ${site.tagline.toLowerCase()}`,
     description: site.description,
+    images: [share],
   },
   appleWebApp: { capable: true, title: site.name, statusBarStyle: "default" },
   formatDetection: { telephone: false },
@@ -62,7 +72,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body className="min-h-dvh">
         <a
           href="#main"

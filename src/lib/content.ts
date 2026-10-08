@@ -28,6 +28,10 @@ export const faqs = [
     a: "Yes. Ferry is free, with no paid plan, no advertising and no account.",
   },
   {
+    q: "Is Ferry open source?",
+    a: "Yes. The web app, the server functions and the command line tool are open source under the MIT licence, and the code is on GitHub.",
+  },
+  {
     q: "How long does a transfer stay open?",
     a: "24 hours, or until the sender ends it. After that the link and code stop working.",
   },
@@ -74,4 +78,5 @@ export const featureList = [
   "Offline mode on the same Wi-Fi or hotspot",
   "Up to 16 devices in one transfer",
   "Command line tool and HTTP API",
+  "Open source under the MIT licence",
 ];

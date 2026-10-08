@@ -2,10 +2,12 @@
   "name": "ferry",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently -n web,convex -c teal,yellow \"next dev\" \"convex dev\"",
     "dev:https": "concurrently -n web,convex -c teal,yellow \"next dev --experimental-https -H 0.0.0.0\" \"convex dev\"",
     "setup": "node scripts/setup.mjs",
+    "og": "tsx scripts/og.tsx",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

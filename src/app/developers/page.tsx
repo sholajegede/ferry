@@ -2,7 +2,7 @@ import { breadcrumbs, JsonLd, pageMeta } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata = pageMeta({
-  ownImage: true,
+  image: "developers",
   title: "Developers: command line and API",
   description: `Send and receive files from the terminal with the ${site.name} command line tool, or create transfers with the HTTP API.`,
   path: "/developers",

@@ -31,6 +31,7 @@ ${comparisons.map((entry) => `- [${site.name} vs ${entry.name}](${site.url}/comp
 
 ## Policies
 
+- [Source code](${site.repo}), MIT licence
 - [Privacy policy](${site.url}/privacy)
 - [Terms](${site.url}/terms)
 

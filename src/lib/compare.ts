@@ -19,7 +19,7 @@ export type Comparison = {
 };
 
 const ferry = {
-  price: "Free. No paid plan",
+  price: "Free and open source. No paid plan",
   account: "None",
   install: "Nothing. Runs in the browser",
   size: "No cap. Limited by free space on the receiving device",
@@ -209,7 +209,7 @@ export const comparisons: Comparison[] = [
     description:
       "PairDrop, Snapdrop and Ferry all send files between browsers. Here is how they differ on encryption, large files, resuming and offline use.",
     answer:
-      "PairDrop and Ferry are close relatives: both are free, run in the browser and send files directly. Choose PairDrop if you want open source software you can host yourself. Choose Ferry for very large files, transfers that resume, a security code you can check, and sending without internet.",
+      "PairDrop and Ferry are close relatives: both are free, run in the browser and send files directly. Choose PairDrop if you want something you can host yourself in one small container. Choose Ferry for very large files, transfers that resume, a security code you can check, and sending without internet.",
     intro: [
       "Snapdrop made browser-to-browser file sharing popular, and PairDrop is the actively maintained project that grew out of it. Both show the devices on your network and let you tap one to send a file.",
       "Ferry starts from the same idea and adds the parts that matter once files get large or the network gets unreliable.",
@@ -236,7 +236,7 @@ export const comparisons: Comparison[] = [
       },
       { label: "Resume", ferry: ferry.resume, them: "Start again" },
       { label: "No internet", ferry: ferry.offline, them: "Only if you host your own copy on that network" },
-      { label: "Self hosting", ferry: "Not offered", them: "Yes" },
+      { label: "Self hosting", ferry: "Yes, with a Convex project and a Node host", them: "Yes, as one Docker container" },
     ],
     ferryWhen: [
       "The file is several gigabytes and you do not want it held in the browser's memory.",
@@ -245,7 +245,7 @@ export const comparisons: Comparison[] = [
       "You need a command line tool or an API as well as a web page.",
     ],
     themWhen: [
-      "You want to read the source code or run your own server.",
+      "You want to run your own copy as a single container with no outside services.",
       "You mostly send small files between devices on one home network and like seeing them appear on their own.",
       "You already have it set up and paired, and it does the job.",
     ],
@@ -265,7 +265,7 @@ export const comparisons: Comparison[] = [
       {
         heading: "Where PairDrop is the better tool",
         body: [
-          "PairDrop is open source under the GPL and can be hosted on your own server, including one that never touches the internet. If auditing the code or owning the whole stack matters to you, that is a real advantage.",
+          "PairDrop runs as one small container on your own server, including a server that never touches the internet. Ferry is open source too, but hosting it needs a Convex project and a Node host. If you want the whole thing on one machine you control, PairDrop is simpler.",
         ],
       },
     ],
@@ -403,7 +403,7 @@ export const comparisons: Comparison[] = [
     themWhen: [
       "You can install the app everywhere and your devices share one network.",
       "You want no server involved at any point.",
-      "You want open source software you can inspect and build yourself.",
+      "You want a native app that can receive in the background.",
     ],
     sections: [
       {
@@ -422,7 +422,7 @@ export const comparisons: Comparison[] = [
       {
         heading: "Where LocalSend is the better tool",
         body: [
-          "If your devices live on one network and you are happy to install an app, LocalSend is simple and depends on nobody's server. It is also open source.",
+          "If your devices live on one network and you are happy to install an app, LocalSend is simple and depends on nobody's server. Both projects are open source.",
         ],
       },
     ],
