@@ -2,6 +2,7 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 import { Suspense } from "react";
 import { SendButton } from "./home-actions";
+import { LaunchBar } from "./launch";
 import { MobileMenu } from "./mobile-menu";
 
 export function Mark({ size = 28 }: { size?: number }) {
@@ -21,17 +22,7 @@ export function SiteHeader() {
   return (
     <>
       {site.productHunt ? (
-        <div className="bg-night px-4 py-2.5 text-center text-sm text-paper">
-          <span aria-hidden>&#9650;</span> Ferry is live on Product Hunt today.{" "}
-          <a
-            href={site.productHunt}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-2 inline-flex h-6 items-center rounded-md bg-peach px-2.5 text-[0.8125rem] font-semibold text-night hover:bg-paper"
-          >
-            Come say hello
-          </a>
-        </div>
+        <LaunchBar />
       ) : (
         <div className="bg-night px-4 py-2.5 text-center text-sm text-paper">
           New: send files with no internet at all.{" "}

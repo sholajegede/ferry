@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HeroExtras, SendButton } from "@/components/home-actions";
+import { LaunchPill } from "@/components/launch";
 import { HeroMock } from "@/components/mocks";
 import { ReceivePanel } from "@/components/receive-panel";
 import { StepsTabs } from "@/components/steps-tabs";
@@ -134,16 +135,7 @@ export default function HomePage() {
           <span className="eyebrow flex h-full items-center border-r border-sea px-3">Free</span>
           <span className="px-3">No account needed</span>
         </p>
-        {site.productHunt && (
-          <a
-            href={site.productHunt}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-2 inline-flex h-[30px] -rotate-2 items-center gap-2 rounded-full bg-orange px-3 align-top text-sm font-semibold text-white hover:rotate-0"
-          >
-            <span aria-hidden>&#9650;</span> Live on Product Hunt
-          </a>
-        )}
+        {site.productHunt && <LaunchPill />}
         <h1 className="mt-5 max-w-5xl text-[2.6rem] sm:text-[3.4rem] lg:text-[4rem]">
           Your files. Your devices.
           <br className="hidden sm:block" /> One scan to connect them.

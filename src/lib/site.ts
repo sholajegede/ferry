@@ -9,4 +9,5 @@ export const site = {
   cliPackage: "ferry-send",
   repo: "https://github.com/sholajegede/ferry",
   productHunt: process.env.NEXT_PUBLIC_PRODUCT_HUNT_URL ?? "",
+  productHuntAt: process.env.NEXT_PUBLIC_PRODUCT_HUNT_AT ?? "",
 };
