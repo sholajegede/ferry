@@ -1,0 +1,30 @@
+{
+  "name": "ferry-send",
+  "version": "0.1.0",
+  "description": "Send and receive end-to-end encrypted files from the terminal.",
+  "type": "module",
+  "bin": {
+    "ferry": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "convex": "^1.46.0",
+    "node-datachannel": "^0.33.4",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/qrcode": "^1.5.5",
+    "esbuild": "^0.25.0",
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}
