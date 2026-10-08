@@ -8,4 +8,5 @@ export const site = {
   contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "",
   cliPackage: "ferry-send",
   repo: "https://github.com/sholajegede/ferry",
+  productHunt: process.env.NEXT_PUBLIC_PRODUCT_HUNT_URL ?? "",
 };

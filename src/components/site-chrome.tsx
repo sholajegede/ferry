@@ -20,15 +20,29 @@ const linkClass = "rounded-full px-3 py-2 font-medium hover:bg-sunken";
 export function SiteHeader() {
   return (
     <>
-      <div className="bg-night px-4 py-2.5 text-center text-sm text-paper">
-        New: send files with no internet at all.{" "}
-        <a
-          href="/offline"
-          className="ml-2 inline-flex h-6 items-center rounded-md bg-paper px-2.5 text-[0.8125rem] font-semibold text-night hover:bg-lilac"
-        >
-          Try offline mode
-        </a>
-      </div>
+      {site.productHunt ? (
+        <div className="bg-night px-4 py-2.5 text-center text-sm text-paper">
+          <span aria-hidden>&#9650;</span> Ferry is live on Product Hunt today.{" "}
+          <a
+            href={site.productHunt}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-2 inline-flex h-6 items-center rounded-md bg-peach px-2.5 text-[0.8125rem] font-semibold text-night hover:bg-paper"
+          >
+            Come say hello
+          </a>
+        </div>
+      ) : (
+        <div className="bg-night px-4 py-2.5 text-center text-sm text-paper">
+          New: send files with no internet at all.{" "}
+          <a
+            href="/offline"
+            className="ml-2 inline-flex h-6 items-center rounded-md bg-paper px-2.5 text-[0.8125rem] font-semibold text-night hover:bg-lilac"
+          >
+            Try offline mode
+          </a>
+        </div>
+      )}
       <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6">
         <div className="mx-auto flex h-14 max-w-[1304px] items-center justify-between gap-4 rounded-full bg-paper/85 px-4 backdrop-blur-md sm:px-6">
           <div className="flex items-center gap-5">

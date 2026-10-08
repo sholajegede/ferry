@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FileMeta, FileSource, NoteView, TransferView } from "@/lib/protocol/types";
+import { armChime, chime } from "@/lib/web/chime";
 import { formatBytes, formatDuration, formatRate } from "@/lib/web/format";
 import { useLocalFlag } from "@/lib/web/hooks";
 import { saveReceived, saveZip } from "@/lib/web/save";
@@ -21,6 +22,7 @@ import { FileTile } from "./file-kind";
 import { Button, useFeedback } from "./ui";
 
 const AUTOSAVE_KEY = "ferry.autosave";
+const SOUND_KEY = "ferry.sound";
 
 type Props = {
   transfers: TransferView[];
@@ -174,6 +176,21 @@ export function TransferPanel(props: Props) {
   const { toast, ask } = useFeedback();
   const [draft, setDraft] = useState("");
   const [autosave, setAutosave] = useLocalFlag(AUTOSAVE_KEY, true);
+  const [sound, setSound] = useLocalFlag(SOUND_KEY, true);
+  const soundRef = useRef(true);
+  const sending = useRef(0);
+
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+  useEffect(() => armChime(), []);
+  useEffect(() => {
+    const out = transfers.filter((t) => t.direction === "out");
+    const open = out.filter((t) => ["waiting", "active", "finishing"].includes(t.status)).length;
+    if (sending.current > 0 && open === 0 && out.some((t) => t.status === "done") && soundRef.current)
+      chime();
+    sending.current = open;
+  }, [transfers]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState(false);
@@ -216,6 +233,7 @@ export function TransferPanel(props: Props) {
       const done = batch.filter((t) => t.status === "done");
       if (done.length === 0) continue;
       const count = `${done.length} ${done.length === 1 ? "file" : "files"} received`;
+      if (soundRef.current) chime();
       if (!autosaveRef.current) {
         toast(`${count}. Choose Save to keep ${done.length === 1 ? "it" : "them"}.`, "ok");
         continue;
@@ -443,6 +461,15 @@ export function TransferPanel(props: Props) {
                 onChange={(event) => setAutosave(event.target.checked)}
               />
               Save received files automatically
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[var(--sea)]"
+                checked={sound}
+                onChange={(event) => setSound(event.target.checked)}
+              />
+              Sound when done
             </label>
           </div>
         </div>
