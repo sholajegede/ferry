@@ -50,6 +50,7 @@ Ferry is a Next.js app (App Router) with a Convex backend, plus a command line t
 - **Offline mode.** Two devices on the same Wi-Fi or hotspot connect by scanning each other's QR codes. No server is contacted.
 - **Installable.** Ferry installs as an app and appears in the Android share sheet.
 - **Command line tool and HTTP API.** A terminal can send to a phone, and a build server can send to a browser.
+- **Usable by AI agents.** An MCP server and a JSON command line let an agent hand a file to a person, ask for one, or send to another agent.
 
 | Start a transfer | Join from a phone |
 | --- | --- |
@@ -151,6 +152,10 @@ Each frame carries a 16-byte file ID and the byte offset of its payload. The rec
 
 **Files go to storage as they arrive.** The receiver writes to the origin private file system from a worker, with a small record in IndexedDB. A browser without that API falls back to memory, with a 512 MB limit.
 
+**The agent side runs on the agent's machine.** A hosted MCP server would have to hold the file, which Ferry never does. So `ferry mcp` is a local process: the file leaves from the machine the agent works on. The terminal commands and the MCP tools share one session layer (`cli/src/session.ts`), so they behave the same.
+
+**Unattended use is strict by default.** With a person at a terminal, a device that joins with the 6-digit code is shown with its security code and the person decides. With no person, there is nobody to compare the codes, so only the link admits a device. An agent can turn code joins on, and must then pass the security code to a person and wait for the answer.
+
 **One protocol engine for the browser and the terminal.** `src/lib/protocol/` imports nothing from the DOM or from Node. The CLI bundles the same code with a WebRTC library for Node.
 
 **Offline mode exchanges the connection details by hand.** With no server to pass messages, each device shows its WebRTC description as a QR code (or a short text code) and reads the other one. It takes one more scan than the online flow, and it works with no internet at all.
@@ -214,11 +219,44 @@ node cli/dist/index.js send report.pdf photos/
 node cli/dist/index.js receive 482107 --out ~/Downloads
 ```
 
-`send` prints a QR code, a link and a 6-digit code, and exits when every file has arrived. `receive` takes the code or the link.
+`send` prints a QR code, a link and a 6-digit code, and exits when every file has arrived. `receive` takes the code or the link. With no code, `receive` opens a transfer and waits for another device to send files.
 
-The package in `cli/` is named `ferry-send` and is not on npm yet. After it is published, `npx ferry-send send report.pdf` does the same thing.
+The package in `cli/` is named `ferry-send`. After it is published, `npx ferry-send send report.pdf` does the same thing.
 
-The build reads `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_SITE_URL` from `.env.local` and uses them as defaults. `--server` and `--site` override them. See [cli/README.md](cli/README.md) for the options.
+The build reads `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_SITE_URL` from `.env.local` and uses them as defaults. `--server` and `--site` override them. See [cli/README.md](cli/README.md) for every command and option.
+
+## For AI agents
+
+An agent can use Ferry without a person at the keyboard. There are two ways in, and both are in the `ferry-send` package.
+
+**The MCP server.** `ferry mcp --root <folder>` gives an agent six tools: `send_files`, `receive_files`, `transfer_status`, `admit_device`, `send_text` and `cancel_transfer`. `send_files` returns a link at once, so the agent can show it to a person while the transfer waits.
+
+```json
+{
+  "mcpServers": {
+    "ferry": { "command": "npx", "args": ["-y", "ferry-send", "mcp", "--root", "/path/to/a/folder"] }
+  }
+}
+```
+
+**The JSON command line.** `--json` prints one event on each line and never prompts. The exit code says how the transfer ended.
+
+```bash
+ferry send report.pdf --json --timeout 900       # give a file to a person or an agent
+ferry receive --json --out ./incoming            # open a transfer and wait for files
+ferry receive "<link>" --json --out ./incoming   # take what another device sends
+ferry send build.zip --to "<link>" --json        # send into a transfer that is open
+pg_dump mydb | ferry send - --name mydb.sql      # pipes work in both directions
+```
+
+Rules for unattended use:
+
+- The MCP server reads and writes only inside its root folder.
+- A received file never replaces an existing file, and a file over `--max-size` is refused before any of it is written.
+- Outside a terminal, only a device with the link gets in. A device with only the 6-digit code is refused unless `--admit any` or `allow_code_join` is set.
+- An MCP transfer ends by itself after 15 minutes.
+
+Agents can read [`llms.txt`](https://ferry.sholajegede.com/llms.txt), [`openapi.json`](public/openapi.json) and the skill file in [`skills/ferry/SKILL.md`](skills/ferry/SKILL.md). The [agents page](https://ferry.sholajegede.com/agents) has the same content for people.
 
 ## HTTP API
 
@@ -288,9 +326,10 @@ The transfer screen shows whether a connection is direct or relayed.
 | `src/lib/web/` | Browser storage, file sources, zip, pairing, transfer history, offline mode |
 | `src/app/`, `src/components/` | Pages and interface |
 | `public/sw.js` | Service worker: offline shell and the share target |
-| `cli/` | The command line tool |
+| `cli/` | The command line tool and the MCP server |
+| `skills/` | A skill file that tells an agent how to use Ferry |
 | `scripts/` | Setup and share-image scripts |
-| `tests/` | Protocol, backend and browser tests |
+| `tests/` | Protocol, backend, browser, command line and agent tests |
 
 ## Limits
 

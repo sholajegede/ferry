@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p convex",
     "test": "tsx --test --test-timeout=60000 tests/*.test.ts",
     "test:bridge": "tsx tests/bridge.ts",
-    "test:e2e": "node tests/e2e.mjs && node tests/e2e-extras.mjs && node tests/cli.mjs",
+    "test:e2e": "node tests/e2e.mjs && node tests/e2e-extras.mjs && node tests/cli.mjs && node tests/agents.mjs",
     "cli:build": "npm --prefix cli install && npm --prefix cli run build"
   },
   "dependencies": {

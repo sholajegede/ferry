@@ -1,0 +1,82 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ferry HTTP API",
+    "version": "1.0.0",
+    "summary": "Create and inspect transfers. File data never passes through this API.",
+    "description": "A client that creates a transfer here still has to host it with the Ferry protocol. The command line tool (npx ferry-send) and its MCP server do that for you.",
+    "license": { "name": "MIT", "identifier": "MIT" }
+  },
+  "servers": [{ "url": "https://ferry.sholajegede.com" }],
+  "paths": {
+    "/v1/rooms": {
+      "post": {
+        "operationId": "createRoom",
+        "summary": "Create a transfer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["roomId", "joinTokenHash"],
+                "properties": {
+                  "roomId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{22}$", "description": "16 random bytes in base64url." },
+                  "joinTokenHash": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA-256 hex of the join token. Derive the token from the link secret with HKDF-SHA-256, 32 zero bytes as salt, and ferry/join/<roomId> as info." },
+                  "name": { "type": "string", "description": "A name for the device that hosts the transfer." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The transfer was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roomId": { "type": "string" },
+                    "code": { "type": "string", "description": "The 6-digit code." },
+                    "expiresAt": { "type": "integer", "description": "Unix time in milliseconds." },
+                    "deviceId": { "type": "string" },
+                    "deviceSecret": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "The body is not valid.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/v1/rooms/{roomId}": {
+      "get": {
+        "operationId": "getRoom",
+        "summary": "Read the state of a transfer",
+        "parameters": [{ "name": "roomId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "The transfer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roomId": { "type": "string" },
+                    "status": { "type": "string" },
+                    "expiresAt": { "type": "integer" },
+                    "devices": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "No transfer has that id.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    }
+  },
+  "components": { "schemas": { "Error": { "type": "object", "properties": { "error": { "type": "string" } } } } }
+}

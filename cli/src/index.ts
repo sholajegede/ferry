@@ -1,41 +1,53 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
-import { ConvexClient } from "convex/browser";
 import QRCode from "qrcode";
-import { api } from "../../convex/_generated/api";
-import { bridgeBackend } from "../../src/lib/protocol/bridge-backend";
-import { randomId } from "../../src/lib/protocol/bytes";
-import { joinTokenFor, joinTokenHash, newLinkSecret } from "../../src/lib/protocol/crypto";
-import {
-  RoomController,
-  type Backend,
-  type RoomState,
-} from "../../src/lib/protocol/room-controller";
-import { diskSinks, loadIdentity, nodePlatform, sourcesFrom } from "./node-platform";
+import { serveMcp } from "./mcp";
+import { EXIT, Session, UsageError, type Admit, type FerryEvent } from "./session";
 
 declare const __DEFAULT_SERVER__: string;
 declare const __DEFAULT_SITE__: string;
+declare const __VERSION__: string;
 
 const HELP = `ferry: send and receive end-to-end encrypted files
 
 Usage
-  ferry send <file or folder>...   Share files and print a QR code, link and 6-digit code
+  ferry send <file or folder>...   Open a transfer and print a QR code, link and 6-digit code
+  ferry send <files>... --to <code or link>
+                                   Send into a transfer another device opened
+  ferry send -                     Send what arrives on standard input (name it with --name)
   ferry receive <code or link>     Receive files into the current folder
+  ferry receive                    Open a transfer and wait for another device to send files
+  ferry mcp                        Run as an MCP server for AI agents
 
 Options
-  --out <folder>    Where received files are written (default: current folder)
-  --keep            Keep a send open for more receivers after the first one finishes
-  --yes             Let devices that join with the 6-digit code in without asking
-  --server <url>    Convex deployment URL of your own Ferry
-  --site <url>      Web address of your own Ferry
-  -h, --help        Show this help
-`;
+  --out <folder>     Where received files are written (default: current folder)
+  --text <note>      Send a text note. Use it with files or alone
+  --to <code|link>   Join a transfer to send into it
+  --keep             Stay open after the first exchange finishes
+  --admit <who>      Who may join a transfer you opened: link, any or ask
+                     link: only a device with the link. any: the 6-digit code too.
+                     ask: ask for each device that uses the code (default in a terminal)
+  --yes              The same as --admit any
+  --max-size <size>  Refuse a received file larger than this, for example 500MB or 2GB
+  --timeout <secs>   Stop after this many seconds
+  --json             Print one JSON event on each line, with no prompts
+  --stdout           With receive: write the received file to standard output
+  --name <name>      With "send -": the file name for the data on standard input
+  --root <folder>    With mcp: the folder the server may read from and write to
+  --server <url>     Convex deployment URL of your own Ferry
+  --site <url>       Web address of your own Ferry
+  -v, --version      Print the version
+  -h, --help         Show this help
 
-function fail(message: string): never {
-  process.stderr.write(`${message}\n`);
-  process.exit(1);
-}
+Exit codes
+  0 finished   1 a file was not transferred   2 wrong usage   3 time limit
+  4 the transfer could not be opened or was ended   130 stopped
+`;
 
 function size(bytes: number) {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -48,270 +60,198 @@ function size(bytes: number) {
   return `${unit === 0 || value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
+export function parseSize(text: string): number {
+  const match = text.trim().match(/^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb|tb)?$/i);
+  if (!match) throw new UsageError(`"${text}" is not a size. Use a form like 500MB or 2GB.`);
+  const power = ["b", "kb", "mb", "gb", "tb"].indexOf((match[2] ?? "b").toLowerCase());
+  return Math.round(Number(match[1]) * 1000 ** power);
+}
+
 const spaced = (code: string) => `${code.slice(0, 3)} ${code.slice(3)}`;
-
-function connect(server: string): Backend {
-  const bridge = process.env.FERRY_TEST_BRIDGE;
-  if (bridge) return bridgeBackend(bridge);
-  if (!server)
-    fail("No server is set. Pass --server <your Convex URL> or set FERRY_SERVER.");
-  const client = new ConvexClient(server);
-  return {
-    mutation: (ref, args) => client.mutation(ref, args),
-    action: (ref, args) => client.action(ref, args),
-    subscribe: (ref, args, onValue, onError) => client.onUpdate(ref, args, onValue, onError),
-  };
-}
-
-function progressLine(state: RoomState, direction: "out" | "in") {
-  const list = state.transfers.filter((t) => t.direction === direction);
-  if (list.length === 0) return "";
-  const done = list.filter((t) => t.status === "done").length;
-  const total = list.reduce((sum, t) => sum + t.size, 0);
-  const moved = list.reduce((sum, t) => sum + t.bytes, 0);
-  const rate = list.reduce((sum, t) => sum + t.rate, 0);
-  const percent = total ? Math.floor((moved / total) * 100) : 100;
-  return `${done}/${list.length} files, ${size(moved)} of ${size(total)} (${percent}%)${rate ? `, ${size(rate)}/s` : ""}`;
-}
-
-function watchProgress(controller: RoomController, direction: "out" | "in") {
-  let last = "";
-  const tty = process.stdout.isTTY;
-  return controller.subscribe(() => {
-    const line = progressLine(controller.getState(), direction);
-    if (!line || line === last) return;
-    last = line;
-    if (tty) process.stdout.write(`\r\x1b[K${line}`);
-  });
-}
 
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
       out: { type: "string" },
+      text: { type: "string" },
+      to: { type: "string" },
       keep: { type: "boolean", default: false },
+      admit: { type: "string" },
       yes: { type: "boolean", default: false },
+      "max-size": { type: "string" },
+      timeout: { type: "string" },
+      json: { type: "boolean", default: false },
+      stdout: { type: "boolean", default: false },
+      name: { type: "string" },
+      root: { type: "string" },
       server: { type: "string" },
       site: { type: "string" },
+      version: { type: "boolean", short: "v", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
   const [command, ...rest] = positionals;
-  if (values.help || !command) {
-    process.stdout.write(HELP);
-    return;
-  }
+  if (values.version) return void process.stdout.write(`${__VERSION__}\n`);
+  if (values.help || !command) return void process.stdout.write(HELP);
 
   const server = values.server ?? process.env.FERRY_SERVER ?? __DEFAULT_SERVER__;
-  const site = (values.site ?? process.env.FERRY_SITE ?? __DEFAULT_SITE__).replace(/\/$/, "");
-  const identity = await loadIdentity();
-  const creds = { deviceId: identity.deviceId, deviceSecret: identity.deviceSecret };
+  const site = values.site ?? process.env.FERRY_SITE ?? __DEFAULT_SITE__;
 
+  if (command === "mcp") {
+    await serveMcp({ server, site, root: path.resolve(values.root ?? process.env.FERRY_ROOT ?? "."), version: __VERSION__ });
+    return;
+  }
+  if (command !== "send" && command !== "receive") throw new UsageError(`Unknown command "${command}". Run ferry --help.`);
+
+  const json = values.json;
+  const interactive = !json && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const admit = (values.yes ? "any" : (values.admit ?? (interactive ? "ask" : "link"))) as Admit;
+  if (!["ask", "link", "any"].includes(admit)) throw new UsageError("--admit takes link, any or ask.");
+  if (admit === "ask" && !interactive) throw new UsageError("--admit ask needs a terminal. Use --admit link or --admit any.");
+  const timeoutMs = values.timeout ? Number(values.timeout) * 1000 : undefined;
+  if (timeoutMs !== undefined && !(timeoutMs > 0)) throw new UsageError("--timeout takes a number of seconds.");
+
+  // Status goes to standard error when the data itself goes to standard output.
+  const status = values.stdout ? process.stderr : process.stdout;
+  const say = (line: string) => void (json ? undefined : status.write(`${line}\n`));
+  const temp: string[] = [];
+
+  let paths: string[] = [];
+  let target: string | undefined;
+  let outDir = values.out;
   if (command === "send") {
-    if (rest.length === 0) fail("Name at least one file or folder to send.");
-    const sources = await sourcesFrom(rest).catch((error: Error) =>
-      fail(`Could not read ${error.message.split("'")[1] ?? "that path"}.`),
-    );
-    if (sources.length === 0) fail("There are no files in what you named.");
-    if (!site) fail("No site address is set. Pass --site <your Ferry address> or set FERRY_SITE.");
-
-    const backend = connect(server);
-    await backend.mutation(api.devices.register, identity);
-    const roomId = randomId(16);
-    const secret = newLinkSecret();
-    const room = await backend.mutation(api.rooms.create, {
-      ...creds,
-      roomId,
-      joinTokenHash: await joinTokenHash(await joinTokenFor(secret, roomId)),
-      visible: false,
-    });
-    const link = `${site}/room/${roomId}#k=${secret}`;
-    const total = sources.reduce((sum, source) => sum + source.size, 0);
-
-    process.stdout.write(await QRCode.toString(link, { type: "terminal", small: true }));
-    process.stdout.write(
-      `\nSending ${sources.length} ${sources.length === 1 ? "file" : "files"} (${size(total)})\n` +
-        `Link  ${link}\n` +
-        `Code  ${spaced(room.code)}  (enter it at ${site})\n\n` +
-        `Waiting for the other device. Press Ctrl+C to stop.\n`,
-    );
-
-    const controller = new RoomController({
-      backend,
-      platform: nodePlatform(diskSinks(path.resolve(values.out ?? "."), () => undefined)),
-      identity,
-      roomId,
-      linkSecret: secret,
-      via: "link",
-    });
-    const asked = new Set<string>();
-    const prompt = createInterface({ input: process.stdin, output: process.stdout });
-    let finishing = false;
-
-    const stop = async (code: number) => {
-      if (finishing) return;
-      finishing = true;
-      prompt.close();
-      await controller.close().catch(() => undefined);
-      await controller.stop();
-      process.exit(code);
-    };
-    process.on("SIGINT", () => {
-      process.stdout.write("\nStopped. The link and code no longer work.\n");
-      void stop(130);
-    });
-
-    controller.onEvent((event) => {
-      if (event.type === "joined") process.stdout.write(`\n${event.name} connected\n`);
-      if (event.type === "note") process.stdout.write(`\nText from the other device: ${event.note.text}\n`);
-    });
-    watchProgress(controller, "out");
-    controller.subscribe(() => {
-      const state = controller.getState();
-      for (const peer of state.peers) {
-        if (peer.status !== "approval" || !peer.code) continue;
-        const key = `${peer.id}:${peer.code}`;
-        if (asked.has(key)) continue;
-        asked.add(key);
-        if (values.yes) {
-          void controller.decide(peer.id, true).catch(() => undefined);
-          continue;
-        }
-        void prompt
-          .question(
-            `\n${peer.name} wants to join and should show the code ${spaced(peer.code)}. Let it in? [y/N] `,
-          )
-          .then((answer) => controller.decide(peer.id, /^y/i.test(answer.trim())))
-          .catch(() => undefined);
-      }
-      if (values.keep || finishing) return;
-      const out = state.transfers.filter((t) => t.direction === "out");
-      const byPeer = new Map<string, typeof out>();
-      for (const transfer of out)
-        byPeer.set(transfer.peerId, [...(byPeer.get(transfer.peerId) ?? []), transfer]);
-      const settled = [...byPeer.values()].filter(
-        (list) =>
-          list.length >= sources.length &&
-          list.every((t) => ["done", "cancelled", "failed"].includes(t.status)),
-      );
-      const busy = out.some((t) => ["active", "finishing", "waiting"].includes(t.status));
-      if (settled.length > 0 && !busy) {
-        const failed = settled.flat().filter((t) => t.status !== "done").length;
-        process.stdout.write(
-          failed
-            ? `\n${failed} ${failed === 1 ? "file was" : "files were"} not delivered.\n`
-            : "\nAll files delivered.\n",
-        );
-        void stop(failed ? 1 : 0);
-      }
-    });
-    await controller.share(sources);
-    controller.start();
-    return;
-  }
-
-  if (command === "receive") {
-    const target = rest[0];
-    if (!target) fail("Give the 6-digit code or the link from the sending device.");
-    const backend = connect(server);
-    await backend.mutation(api.devices.register, identity);
-
-    let roomId = "";
-    let secret: string | null = null;
-    const digits = target.replace(/\s/g, "");
-    if (/^\d{6}$/.test(digits)) {
-      const found = await backend.mutation(api.rooms.lookupCode, { ...creds, code: digits });
-      if (!found.roomId)
-        fail(
-          found.limited
-            ? "Too many tries. Wait a few minutes and try again."
-            : "No transfer has that code. Check the six digits on the other device.",
-        );
-      roomId = found.roomId;
-    } else {
-      const match = target.match(/\/room\/([A-Za-z0-9_-]{16,64})(?:#k=([A-Za-z0-9_-]{40,64}))?/);
-      if (!match) fail("That is not a Ferry link or a 6-digit code.");
-      roomId = match[1];
-      secret = match[2] ?? null;
+    paths = rest;
+    target = values.to;
+    if (paths.includes("-")) {
+      if (paths.length > 1) throw new UsageError('Use "-" alone. It cannot be mixed with file names.');
+      const dir = await mkdtemp(path.join(tmpdir(), "ferry-in-"));
+      temp.push(dir);
+      const file = path.join(dir, path.basename(values.name ?? "data.bin"));
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+      await writeFile(file, Buffer.concat(chunks));
+      paths = [file];
     }
-
-    const outDir = path.resolve(values.out ?? ".");
-    let saved = 0;
-    const controller = new RoomController({
-      backend,
-      platform: nodePlatform(
-        diskSinks(outDir, (file) => {
-          saved++;
-          process.stdout.write(`\nSaved ${path.relative(process.cwd(), file) || file}\n`);
-        }),
-      ),
-      identity,
-      roomId,
-      linkSecret: secret,
-      via: secret ? "link" : "code",
-    });
-
-    let shownCode = "";
-    let idle: ReturnType<typeof setTimeout> | null = null;
-    const stop = async (code: number) => {
-      await controller.close().catch(() => undefined);
-      await controller.stop();
-      process.exit(code);
-    };
-    process.on("SIGINT", () => void stop(130));
-
-    const endings: Record<string, string> = {
-      missing: "That transfer does not exist.",
-      closed: "The sender ended the transfer.",
-      expired: "That transfer has expired.",
-      declined: "The sender did not let this device in.",
-      full: "That transfer is full.",
-      "bad-link": "That link is not valid. Copy it again from the sending device.",
-      error: "Could not open the transfer. Check your connection.",
-    };
-
-    controller.onEvent((event) => {
-      if (event.type === "joined") process.stdout.write(`Connected to ${event.name}\n`);
-      if (event.type === "note") process.stdout.write(`\nText from the sender: ${event.note.text}\n`);
-    });
-    watchProgress(controller, "in");
-    controller.subscribe(() => {
-      const state = controller.getState();
-      if (endings[state.phase]) {
-        process.stdout.write(`\n${endings[state.phase]}\n`);
-        void stop(saved > 0 && state.phase === "closed" ? 0 : 1);
-        return;
-      }
-      const code = state.peers[0]?.code;
-      if (state.phase === "approval" && code && code !== shownCode) {
-        shownCode = code;
-        process.stdout.write(
-          `Security code ${spaced(code)}. The sender has to confirm the same code on their screen.\n`,
-        );
-      }
-      const incoming = state.transfers.filter((t) => t.direction === "in");
-      const settled =
-        incoming.length > 0 &&
-        incoming.every((t) => ["done", "cancelled", "failed"].includes(t.status));
-      if (idle) clearTimeout(idle);
-      idle = settled
-        ? setTimeout(() => {
-            const failed = incoming.filter((t) => t.status !== "done").length;
-            process.stdout.write(
-              failed
-                ? `\n${failed} ${failed === 1 ? "file was" : "files were"} not received.\n`
-                : `\nDone. ${saved} ${saved === 1 ? "file" : "files"} in ${outDir}\n`,
-            );
-            void stop(failed ? 1 : 0);
-          }, 2500)
-        : null;
-    });
-    controller.start();
-    return;
+    if (paths.length === 0 && !values.text) throw new UsageError("Name at least one file or folder to send, or pass --text.");
+  } else {
+    target = rest[0];
+    if (values.stdout) {
+      outDir = await mkdtemp(path.join(tmpdir(), "ferry-out-"));
+      temp.push(outDir);
+    }
   }
 
-  fail(`Unknown command "${command}". Run ferry --help.`);
+  const prompt = interactive ? createInterface({ input: process.stdin, output: process.stdout }) : null;
+  let session: Session | null = null;
+  let tty = "";
+
+  const onEvent = (event: FerryEvent) => {
+    if (json) return void process.stdout.write(`${JSON.stringify(event)}\n`);
+    const clear = () => {
+      if (tty) status.write("\r\x1b[K");
+      tty = "";
+    };
+    switch (event.event) {
+      case "join_request":
+        clear();
+        void prompt
+          ?.question(`${event.device} wants to join and should show the code ${spaced(event.security_code)}. Let it in? [y/N] `)
+          .then((answer) => session?.decide(event.device_id, /^y/i.test(answer.trim())))
+          .catch(() => undefined);
+        break;
+      case "security_code":
+        clear();
+        say(`Security code ${spaced(event.code)}. The other device has to confirm the same code on its screen.`);
+        break;
+      case "connected":
+        clear();
+        say(`${event.device} connected`);
+        break;
+      case "progress": {
+        if (!status.isTTY) break;
+        const percent = event.total_bytes ? Math.floor((event.bytes / event.total_bytes) * 100) : 100;
+        tty = `${event.files_done}/${event.files_total} files, ${size(event.bytes)} of ${size(event.total_bytes)} (${percent}%)${event.rate ? `, ${size(event.rate)}/s` : ""}`;
+        status.write(`\r\x1b[K${tty}`);
+        break;
+      }
+      case "file_saved":
+        clear();
+        say(`Saved ${path.relative(process.cwd(), event.path) || event.path}`);
+        break;
+      case "file_refused":
+        clear();
+        say(`Refused ${event.name} (${size(event.size)}). ${event.reason}`);
+        break;
+      case "text":
+        clear();
+        say(`Text from ${event.from}: ${event.text}`);
+        break;
+      case "text_delivered":
+        clear();
+        say("Text delivered");
+        break;
+      case "done":
+        clear();
+        if (event.reason === "complete") {
+          if (event.sent > 0) say(event.sent === 1 ? "The file was delivered." : "All files delivered.");
+          if (event.received > 0) say(`Done. ${event.received} ${event.received === 1 ? "file" : "files"} in ${session?.outDir}`);
+          if (event.sent === 0 && event.received === 0) say(event.message);
+        } else say(event.message);
+        break;
+    }
+  };
+
+  session = await Session.open({
+    paths,
+    text: values.text,
+    target,
+    outDir,
+    maxBytes: values["max-size"] ? parseSize(values["max-size"]) : undefined,
+    keep: values.keep,
+    admit,
+    timeoutMs,
+    server,
+    site,
+    onEvent: (event) => {
+      if (event.event !== "ready") onEvent(event);
+    },
+  });
+
+  if (json) {
+    process.stdout.write(`${JSON.stringify(session.events.find((event) => event.event === "ready"))}\n`);
+  } else if (session.link && session.code) {
+    status.write(await QRCode.toString(session.link, { type: "terminal", small: true }));
+    const total = session.events.find((event) => event.event === "ready");
+    const files = total?.event === "ready" ? total.files : [];
+    say(
+      (files.length > 0
+        ? `\nSending ${files.length} ${files.length === 1 ? "file" : "files"} (${size(files.reduce((sum, file) => sum + file.size, 0))})`
+        : command === "receive"
+          ? `\nWaiting for files. They are saved in ${session.outDir}`
+          : "\nSending a text note") +
+        `\nLink  ${session.link}\nCode  ${spaced(session.code)}  (enter it at ${site.replace(/\/$/, "")})\n\n` +
+        "Waiting for the other device. Press Ctrl+C to stop.",
+    );
+  }
+
+  process.on("SIGINT", () => void session?.stop());
+  process.on("SIGTERM", () => void session?.stop());
+  const done = await session.result;
+  prompt?.close();
+
+  if (values.stdout && done.saved.length > 0) {
+    // One file goes out as it is. Status lines already went to standard error.
+    await pipeline(createReadStream(done.saved[0]), process.stdout, { end: false });
+  }
+  for (const dir of temp) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  process.exit(EXIT[done.reason]);
 }
 
-main().catch((error: Error) => fail(error.message || "Something went wrong."));
+main().catch((error: Error) => {
+  const usage = error instanceof UsageError;
+  if (process.argv.includes("--json"))
+    process.stdout.write(`${JSON.stringify({ event: "error", code: usage ? "usage" : "error", message: error.message || "Something went wrong." })}\n`);
+  else process.stderr.write(`${error.message || "Something went wrong."}\n`);
+  process.exit(usage ? 2 : 4);
+});

@@ -107,6 +107,7 @@ const columns: { title: string; links: { label: string; href: string; plain?: bo
     title: "Developers",
     links: [
       { label: "Command line", href: "/developers" },
+      { label: "For AI agents", href: "/agents" },
       { label: "HTTP API", href: "/developers#http-api" },
       { label: "Encryption", href: "/developers#encryption" },
       { label: "Source code", href: site.repo, plain: true },

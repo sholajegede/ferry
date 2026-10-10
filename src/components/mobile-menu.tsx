@@ -13,6 +13,7 @@ const links = [
   { label: "Questions", href: "/#faq" },
   { label: "Compare", href: "/compare" },
   { label: "Developers", href: "/developers" },
+  { label: "For AI agents", href: "/agents" },
 ];
 
 export function MobileMenu() {
