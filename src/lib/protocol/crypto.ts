@@ -179,3 +179,9 @@ export async function fileIdFor(parts: {
   );
   return toBase64Url(digest.subarray(0, 16));
 }
+
+/** The id for sending a file again after it went across. Each repeat gets its own id. */
+export async function resendIdFor(fileId: string, round: number) {
+  const digest = await sha256(utf8(`${fileId}\nresend\n${round}`));
+  return toBase64Url(digest.subarray(0, 16));
+}

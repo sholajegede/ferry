@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FileMeta, FileSource, NoteView, TransferView } from "@/lib/protocol/types";
 import { armChime, chime } from "@/lib/web/chime";
 import { formatBytes, formatDuration, formatRate } from "@/lib/web/format";
+import { clearPast, prunePast, recordPast, usePast } from "@/lib/web/history";
 import { useLocalFlag } from "@/lib/web/hooks";
 import { saveReceived, saveZip } from "@/lib/web/save";
 import { removeReceived } from "@/lib/web/sinks";
@@ -30,6 +31,8 @@ type Props = {
   peerNames: Record<string, string>;
   connected: boolean;
   pending: FileMeta[];
+  /** When set, finished transfers are remembered in this browser under this id. */
+  historyId?: string;
   onFiles(files: FileSource[]): void;
   onNote(text: string): boolean;
   onCancel(transfer: TransferView): void;
@@ -210,6 +213,30 @@ export function TransferPanel(props: Props) {
     [transfers, hidden],
   );
   const incomingDone = visible.filter((t) => t.direction === "in" && t.status === "done");
+
+  // Finished transfers are written to this browser, so the list is still here after a refresh.
+  const { historyId } = props;
+  const past = usePast(historyId);
+  useEffect(() => prunePast(), []);
+  useEffect(() => {
+    if (!historyId) return;
+    const done = transfers.filter((t) => t.status === "done");
+    if (done.length === 0) return;
+    recordPast(
+      historyId,
+      done.map((t) => ({
+        key: t.key,
+        name: t.name,
+        size: t.size,
+        type: t.type,
+        direction: t.direction,
+        peer: peerNames[t.peerId] ?? "",
+        at: Date.now(),
+      })),
+    );
+  }, [historyId, transfers, peerNames]);
+  const live = useMemo(() => new Set(transfers.map((t) => t.key)), [transfers]);
+  const earlier = useMemo(() => past.filter((item) => !live.has(item.key)).reverse(), [past, live]);
 
   const { onArrival } = props;
   useEffect(
@@ -475,9 +502,11 @@ export function TransferPanel(props: Props) {
         </div>
         {summary && <p className="mb-3 text-sm">{summary}</p>}
         {visible.length === 0 && pending.length === 0 ? (
+          earlier.length > 0 ? null : (
           <p className="rounded-[14px] border border-line bg-paper p-5 text-ink/80">
             Nothing sent or received yet. Drop files anywhere on this page, or paste them.
           </p>
+          )
         ) : (
           <ul className="space-y-2">
             {pending.map((file) => (
@@ -530,6 +559,40 @@ export function TransferPanel(props: Props) {
               />
             ))}
           </ul>
+        )}
+        {earlier.length > 0 && historyId && (
+          <div className={visible.length > 0 || pending.length > 0 ? "mt-8" : ""}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="eyebrow">Earlier on this device</h3>
+              <button
+                type="button"
+                onClick={() => clearPast(historyId)}
+                className="text-sm underline decoration-line underline-offset-4 hover:text-sea-deep"
+              >
+                Clear the list
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {earlier.map((item) => (
+                <li key={item.key} className="rounded-[14px] border border-line bg-paper p-3.5">
+                  <div className="flex items-start gap-3">
+                    <FileTile name={item.name} type={item.type} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold leading-snug text-sea-deep [overflow-wrap:anywhere]">{item.name}</p>
+                      <p className="mt-0.5 text-sm text-ink/80">
+                        {item.direction === "out" ? "Sent" : "Received"}
+                        {item.peer ? ` ${item.direction === "out" ? "to" : "from"} ${item.peer}` : ""}, {formatBytes(item.size)},{" "}
+                        {new Date(item.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-sm text-ink/70">
+              This list is kept in this browser only. It shows names and sizes, not the files.
+            </p>
+          </div>
         )}
       </section>
     </div>

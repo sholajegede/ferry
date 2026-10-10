@@ -236,6 +236,32 @@ await step("text and menu", async () => {
   await guest.context.close();
 });
 
+await step("send again and history", async () => {
+  const host = await device("host");
+  const guest = await device("guest");
+  await host.page.goto(base);
+  await host.page.getByRole("button", { name: "Send files", exact: true }).first().click();
+  await host.page.waitForURL(/\/room\//);
+  await guest.page.goto(host.page.url());
+  await host.page.getByText("1 device connected").waitFor();
+  const received = guest.page.locator("li", { hasText: /Received/ });
+  const input = host.page.locator('input[type="file"]').first();
+  await input.setInputFiles(photo);
+  await received.first().waitFor({ timeout: 20000 });
+  await input.setInputFiles(photo);
+  await received.nth(1).waitFor({ timeout: 20000 });
+  check("the same file can be sent a second time", (await received.count()) === 2);
+  await host.page.reload();
+  await host.page.getByRole("heading", { name: "Earlier on this device" }).waitFor({ timeout: 10000 });
+  const earlier = host.page.locator('section[aria-label="Transfers"] li', { hasText: /Sent to/ });
+  check("the list of sent files is still there after a refresh", (await earlier.count()) === 2);
+  await host.page.getByRole("button", { name: "Clear the list" }).click();
+  await host.page.getByRole("heading", { name: "Earlier on this device" }).waitFor({ state: "detached" });
+  check("the list can be cleared", true);
+  await host.context.close();
+  await guest.context.close();
+});
+
 await browser.close();
 console.log(`\n${results.filter(Boolean).length} of ${results.length} checks passed`);
 process.exit(results.every(Boolean) ? 0 : 1);

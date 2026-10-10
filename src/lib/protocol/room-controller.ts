@@ -10,6 +10,7 @@ import {
   createKeyRecord,
   deriveSession,
   fileIdFor,
+  resendIdFor,
   joinTokenFor,
   openText,
   sealText,
@@ -232,13 +233,38 @@ export class RoomController {
     };
   }
 
+  /** How a file stands with the devices in the room: not offered, on its way, or across on all of them. */
+  private standing(id: string): "new" | "busy" | "done" {
+    const states = [...this.peers.values()]
+      .filter((peer) => peer.admitted && peer.peer)
+      .map((peer) => peer.peer!.outStatus(id))
+      .filter((status) => status !== undefined);
+    if (states.length === 0) return this.shared.some((item) => item.id === id) ? "busy" : "new";
+    if (states.every((status) => status === "done")) return "done";
+    return states.some((status) => status === "cancelled" || status === "failed") ? "new" : "busy";
+  }
+
+  /**
+   * Offer files to every device in the room.
+   * A file that is still on its way is left alone and counted in `busy`.
+   * A file that already went across is sent again as a new transfer.
+   */
   async share(sources: FileSource[]) {
     const batch = randomId(6);
     const items: OutgoingItem[] = [];
+    let busy = 0;
     for (const source of sources) {
-      const id = await fileIdFor(source);
+      const base = await fileIdFor(source);
+      let id = base;
+      let round = 1;
+      let standing = this.standing(id);
+      while (standing === "done") {
+        id = await resendIdFor(base, ++round);
+        standing = this.standing(id);
+      }
       if (items.some((item) => item.id === id)) continue;
       const existing = this.shared.find((item) => item.id === id);
+      if (existing && standing === "busy") busy += 1;
       items.push(
         existing ?? {
           id,
@@ -255,7 +281,7 @@ export class RoomController {
     for (const peer of this.peers.values())
       if (peer.admitted && peer.peer) peer.peer.offer(items, true);
     this.notify();
-    return items.length;
+    return { offered: items.length - busy, busy };
   }
 
   sendNote(text: string) {

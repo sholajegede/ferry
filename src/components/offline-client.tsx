@@ -270,7 +270,12 @@ export function OfflineClient() {
             peerNames={peerNames}
             connected={state.step === "connected"}
             pending={NONE}
-            onFiles={(files) => void session.share(files)}
+            onFiles={(files) =>
+              void session.share(files).then(({ offered, busy }) => {
+                if (busy > 0 && offered === 0)
+                  toast(busy === 1 ? "That file is already in this transfer." : "Those files are already in this transfer.");
+              })
+            }
             onNote={(text) => session.sendNote(text)}
             onCancel={(transfer) => session.cancel(transfer)}
             onWithdraw={(id) => session.withdraw(id)}

@@ -301,6 +301,11 @@ export class PeerSession {
     this.options.changed();
   }
 
+  /** The state of a file this side is sending, if it was offered. */
+  outStatus(id: string) {
+    return this.outs.get(id)?.status;
+  }
+
   forget(id: string) {
     const out = this.outs.get(id);
     if (out && ["done", "cancelled", "failed"].includes(out.status)) this.outs.delete(id);

@@ -579,7 +579,13 @@ export function RoomClient() {
         peerNames={peerNames}
         connected={connected.length > 0}
         pending={state.pending}
-        onFiles={(files) => void controller.share(files)}
+        historyId={id}
+        onFiles={(files) =>
+          void controller.share(files).then(({ offered, busy }) => {
+            if (busy > 0 && offered === 0)
+              toast(busy === 1 ? "That file is already in this transfer." : "Those files are already in this transfer.");
+          })
+        }
         onNote={(text) => controller.sendNote(text)}
         onCancel={(transfer) => controller.cancel(transfer)}
         onWithdraw={(transferId) => controller.withdraw(transferId)}

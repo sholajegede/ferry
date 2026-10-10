@@ -1,5 +1,5 @@
 import { fromBase64Url, randomId, text, toBase64Url, utf8 } from "../protocol/bytes";
-import { createKeyRecord, deriveSession, fileIdFor, type KeyRecord } from "../protocol/crypto";
+import { createKeyRecord, deriveSession, fileIdFor, resendIdFor, type KeyRecord } from "../protocol/crypto";
 import { detectRoute } from "../protocol/link";
 import { PeerSession } from "../protocol/peer-session";
 import type {
@@ -162,10 +162,17 @@ export class OfflineSession {
   async share(sources: FileSource[]) {
     const batch = randomId(6);
     const items: OutgoingItem[] = [];
+    let busy = 0;
     for (const source of sources) {
-      const id = await fileIdFor(source);
+      const base = await fileIdFor(source);
+      let id = base;
+      let round = 1;
+      // A file that already went across is sent again as a new transfer.
+      while (this.peer?.outStatus(id) === "done") id = await resendIdFor(base, ++round);
       if (items.some((item) => item.id === id)) continue;
       const existing = this.shared.find((item) => item.id === id);
+      const status = this.peer?.outStatus(id);
+      if (existing && status !== "cancelled" && status !== "failed") busy += 1;
       const item = existing ?? {
         id,
         name: source.name,
@@ -180,7 +187,7 @@ export class OfflineSession {
     }
     this.peer?.offer(items, true);
     this.refresh();
-    return items.length;
+    return { offered: items.length - busy, busy };
   }
 
   sendNote(value: string) {

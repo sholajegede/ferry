@@ -99,6 +99,7 @@ export default function PrivacyPage() {
         <li>Your list of remembered devices and the keys shared with them.</li>
         <li>Encryption keys for transfers that are still open.</li>
         <li>Files you received, in the browser&rsquo;s private storage, until you save them. {site.name} clears finished files after 24 hours and unfinished ones after 3 days.</li>
+        <li>A list of the files you sent and received in a transfer: their names, sizes and times. It does not hold the files or any text you sent. You can clear it on the transfer page, and {site.name} removes it after 2 days.</li>
         <li>Your settings, such as whether received files save automatically.</li>
       </ul>
       <p>
