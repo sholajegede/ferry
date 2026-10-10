@@ -39,6 +39,8 @@ Ferry is a Next.js app (App Router) with a Convex backend, plus a command line t
 - **No size cap.** The receiver writes each piece to storage as it arrives, so a 40 GB file does not have to fit in memory.
 - **End-to-end encryption.** Every piece is sealed with AES-256-GCM. The keys come from an ECDH exchange between the two devices, and both screens show the same 6-digit security code.
 - **Resume.** After a dropped connection or a page reload, a transfer continues from the last byte the receiver saved.
+- **Send again.** A file that already went across can be sent a second time. A file that is still on its way is left alone, and Ferry says so.
+- **History on the device.** The list of sent and received files is still there after a refresh. It is kept in the browser only, and it can be cleared.
 - **Steady connections.** A short network gap is ignored. A longer one finds a new route on the same connection, so the transfer does not start a new handshake.
 - **Four ways to connect.** QR code, link, 6-digit code, or a list of senders on the same network.
 - **Up to 16 devices in one transfer.** A device that joins late gets the files already shared.
@@ -142,6 +144,10 @@ Each frame carries a 16-byte file ID and the byte offset of its payload. The rec
 **A star, not a mesh.** In a transfer with several devices, each guest connects to the host only. The host is the one with the files, and a mesh would multiply connections with no gain.
 
 **The acknowledgement is the resume point.** There is no separate resume protocol. The receiver reports bytes written to storage, and the sender continues from there after any break.
+
+**A file's ID comes from the file, and a repeat send gets a new one.** The ID is a hash of the path, name, size and modified time, so the same file has the same ID after a reconnect. That is what makes resume work. It also made a second send of a finished file look like a repeat offer, which was skipped with no message. Now a file that is done on every device gets a new ID derived from the first one, and goes across as a new transfer.
+
+**History is a list of names, kept in the browser.** After a refresh, the page has no memory of what it sent. Ferry writes each finished transfer to `localStorage`: the name, size, direction, time and the other device's name. It never writes file contents or text notes, because people send passwords as text. The list is tied to one transfer and is removed after 2 days. Nothing about it goes to the server.
 
 **Files go to storage as they arrive.** The receiver writes to the origin private file system from a worker, with a small record in IndexedDB. A browser without that API falls back to memory, with a 512 MB limit.
 
@@ -279,7 +285,7 @@ The transfer screen shows whether a connection is direct or relayed.
 | --- | --- |
 | `convex/` | Schema and functions: devices, rooms, signaling, remembered devices, statistics, TURN credentials, the HTTP API, the cleanup job |
 | `src/lib/protocol/` | The transfer engine, shared by the web app and the CLI |
-| `src/lib/web/` | Browser storage, file sources, zip, pairing, offline mode |
+| `src/lib/web/` | Browser storage, file sources, zip, pairing, transfer history, offline mode |
 | `src/app/`, `src/components/` | Pages and interface |
 | `public/sw.js` | Service worker: offline shell and the share target |
 | `cli/` | The command line tool |
@@ -290,6 +296,7 @@ The transfer screen shows whether a connection is direct or relayed.
 
 - Both devices must have Ferry open at the same time. Ferry stores nothing, so there is no link to download from later.
 - The receiver needs free browser storage for the whole file. Saving copies it to the download folder, so a large file needs that space twice until the browser clears the first copy.
+- The history after a refresh shows what was sent and received. It cannot save a received file again, and it does not keep text notes. Offline mode has no history.
 - With no relay configured, a transfer fails or keeps reconnecting on networks that block direct connections. Mobile data is the common case.
 - A remembered device must have Ferry open to get the incoming-transfer prompt. There are no push notifications.
 - "On your network now" matches devices by public IP address. On a network that many strangers share, turn it off with the checkbox on the transfer screen.
