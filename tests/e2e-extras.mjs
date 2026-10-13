@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
 
@@ -37,6 +38,46 @@ async function device(name, options = {}) {
   const page = await context.newPage();
   page.on("pageerror", (error) => console.log(`[${name}] page error: ${error.message}`));
   return { context, page };
+}
+
+/** Read a zip made by the browser (stored entries, no compression) and return each entry's bytes. */
+function readZip(buffer) {
+  const end = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (end < 0) throw new Error("no end-of-archive record");
+  let count = buffer.readUInt16LE(end + 10);
+  let at = buffer.readUInt32LE(end + 16);
+  const zip64 = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x06, 0x06]));
+  if (zip64 >= 0 && (count === 0xffff || at === 0xffffffff)) {
+    count = Number(buffer.readBigUInt64LE(zip64 + 32));
+    at = Number(buffer.readBigUInt64LE(zip64 + 48));
+  }
+  const entries = new Map();
+  for (let i = 0; i < count; i++) {
+    if (buffer.readUInt32LE(at) !== 0x02014b50) throw new Error("bad central directory");
+    let size = buffer.readUInt32LE(at + 24);
+    const nameLength = buffer.readUInt16LE(at + 28);
+    const extraLength = buffer.readUInt16LE(at + 30);
+    const commentLength = buffer.readUInt16LE(at + 32);
+    let local = buffer.readUInt32LE(at + 42);
+    const name = buffer.subarray(at + 46, at + 46 + nameLength).toString();
+    const extra = buffer.subarray(at + 46 + nameLength, at + 46 + nameLength + extraLength);
+    for (let x = 0; x + 4 <= extra.length; ) {
+      const id = extra.readUInt16LE(x);
+      const length = extra.readUInt16LE(x + 2);
+      if (id === 1) {
+        let y = x + 4;
+        if (size === 0xffffffff) (size = Number(extra.readBigUInt64LE(y))), (y += 8);
+        if (buffer.readUInt32LE(at + 20) === 0xffffffff) y += 8;
+        if (local === 0xffffffff) local = Number(extra.readBigUInt64LE(y));
+      }
+      x += 4 + length;
+    }
+    if (buffer.readUInt32LE(local) !== 0x04034b50) throw new Error(`bad local header for ${name}`);
+    const start = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28);
+    entries.set(name, buffer.subarray(start, start + size));
+    at += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
 }
 
 async function step(name, body) {
@@ -258,6 +299,33 @@ await step("send again and history", async () => {
   await host.page.getByRole("button", { name: "Clear the list" }).click();
   await host.page.getByRole("heading", { name: "Earlier on this device" }).waitFor({ state: "detached" });
   check("the list can be cleared", true);
+  await host.context.close();
+  await guest.context.close();
+});
+
+await step("zip of received files", async () => {
+  const host = await device("host");
+  const guest = await device("guest");
+  await host.page.goto(base);
+  await host.page.getByRole("button", { name: "Send files", exact: true }).first().click();
+  await host.page.waitForURL(/\/room\//);
+  await guest.page.goto(host.page.url());
+  await host.page.getByText("1 device connected").waitFor();
+  const sent = [photo, path.join(files, "album", "a.txt")];
+  const download = guest.page.waitForEvent("download", { timeout: 60000 });
+  await host.page.locator('input[type="file"]').first().setInputFiles(sent);
+  const zip = await (await download).path();
+  let entries = new Map();
+  try {
+    entries = readZip(await readFile(zip));
+  } catch (error) {
+    check("the zip of several received files opens", false, error.message);
+  }
+  if (entries.size > 0) {
+    let same = entries.size === sent.length;
+    for (const file of sent) same &&= Buffer.compare(entries.get(path.basename(file)) ?? Buffer.alloc(0), await readFile(file)) === 0;
+    check("the zip of several received files opens and holds every file intact", same, `${entries.size} entries`);
+  }
   await host.context.close();
   await guest.context.close();
 });

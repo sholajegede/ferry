@@ -268,11 +268,10 @@ export async function writeStreamToDisk(
       const { done, value } = await reader.read();
       if (done) break;
       const copy = value.slice();
-      await call(
-        { op: "write", name, at, buffer: copy.buffer, offset: 0, length: copy.byteLength },
-        [copy.buffer],
-      );
-      at += copy.byteLength;
+      // Read the length first. Moving the buffer to the worker empties it on this side.
+      const length = copy.byteLength;
+      await call({ op: "write", name, at, buffer: copy.buffer, offset: 0, length }, [copy.buffer]);
+      at += length;
     }
   } finally {
     await call({ op: "close", name });
