@@ -51,18 +51,54 @@ function statusLine(current: Job) {
   if (current.status === "failed") return current.message ?? "That did not work.";
   if (current.status === "starting") return "Starting";
   if (current.status === "sending") return `Sending to ${current.device ?? "the other device"}`;
-  if (current.status === "connected") return current.pairing ? `Connected to ${current.device}. Accept on that device.` : `Connected to ${current.device}`;
+  if (current.status === "receiving") return `Receiving from ${current.device ?? "the other device"}`;
+  if (current.status === "connected") {
+    if (current.mode === "pair") return `Connected to ${current.device}. Accept on that device.`;
+    if (current.mode === "receive") return `Connected to ${current.device}. Send from it.`;
+    return `Connected to ${current.device}`;
+  }
   if (current.ringing) return `Waiting for ${current.ringing}`;
   return "Waiting for the other device";
 }
+
+const size = (bytes: number) => {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  return `${unit === 0 || value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+};
+
+function receivedView(current: Job) {
+  if (current.received.length === 0) return null;
+  const list = h("div", { class: "received" });
+  for (const entry of current.received) {
+    if (entry.kind === "file") {
+      list.append(h("div", { class: "got" }, h("p", { class: "what" }, entry.name), h("p", { class: "sub" }, `${size(entry.size)}, saved in Downloads`)));
+    } else {
+      const copy = button("Copy", () => void navigator.clipboard.writeText(entry.text).then(() => render("Copied.")), "small");
+      list.append(h("div", { class: "got" }, h("p", { class: "sub" }, `Text from ${entry.from}`), h("p", { class: "what text" }, entry.text), copy));
+    }
+  }
+  return h("section", { class: "card" }, h("p", { class: "eyebrow" }, "Received"), list);
+}
+
+const titles = { send: "Sending", receive: "Receive from a phone", pair: "Remember a phone" };
+const intros = {
+  receive: "Open the link on your phone, then send files or text from it. Files go to your Downloads folder.",
+  pair: "Open the link on your phone. The two devices will remember each other.",
+};
 
 function jobView(current: Job) {
   const tone = current.status === "done" ? "done" : current.status === "failed" ? "failed" : "";
   const card = h(
     "section",
     { class: "card" },
-    h("p", { class: "eyebrow" }, current.pairing ? "Remember a phone" : "Sending"),
-    current.item ? h("p", { class: "what" }, describe(current.item)) : h("p", { class: "what" }, "Open the link on your phone. The two devices will remember each other."),
+    h("p", { class: "eyebrow" }, titles[current.mode]),
+    h("p", { class: "what" }, current.item ? describe(current.item) : intros[current.mode as "receive" | "pair"]),
   );
   const showCode = current.link && !current.ringing && (current.status === "waiting" || current.status === "starting");
   if (showCode && qr) {
@@ -79,19 +115,18 @@ function jobView(current: Job) {
   if (current.ringing && current.status === "waiting") {
     card.append(h("p", { class: "note", style: "margin-top:10px" }, `${current.ringing} gets a prompt when Ferry is open on it. Nothing is stored on a server.`));
   }
-  const status = h("p", { class: `status ${tone}`, style: "margin-top:12px" }, h("span", { class: "dot" }), statusLine(current));
-  card.append(status);
-  if (current.status === "sending") {
+  card.append(h("p", { class: `status ${tone}`, style: "margin-top:12px" }, h("span", { class: "dot" }), statusLine(current)));
+  if (current.status === "sending" || current.status === "receiving") {
     card.append(h("div", { class: "bar", style: "margin-top:8px" }, h("i", { style: `width:${Math.round((current.progress ?? 0) * 100)}%` })));
   }
   const actions = h("div", { class: "row", style: "margin-top:12px" });
   if (current.link && (current.status === "waiting" || current.status === "starting")) {
     actions.append(button("Copy link", () => void navigator.clipboard.writeText(current.link!).then(() => render("Link copied.")), "small"));
   }
-  if (current.status === "done" || current.status === "failed") actions.append(button("Send something else", () => send({ to: "offscreen", type: "stop" }), "small primary"));
+  if (current.status === "done" || current.status === "failed") actions.append(button("Start again", () => send({ to: "offscreen", type: "stop" }), "small primary"));
   else actions.append(button("End", () => send({ to: "offscreen", type: "stop" }), "small"));
   card.append(actions);
-  return card;
+  return [card, receivedView(current)].filter(Boolean) as Node[];
 }
 
 function composeView(notice?: string) {
@@ -133,10 +168,11 @@ function composeView(notice?: string) {
     h(
       "div",
       { class: "row" },
-      button("Send files", () => void chrome.tabs.create({ url: SITE })),
+      button("Receive from a phone", () => send({ to: "offscreen", type: "receive" })),
       button("Remember a phone", () => send({ to: "offscreen", type: "pair" })),
     ),
   );
+  nodes.push(button("Send files from this computer", () => void chrome.tabs.create({ url: SITE }), "small"));
   if (notice) nodes.push(h("p", { class: "note" }, notice));
   nodes.push(h("p", { class: "lock" }, "End-to-end encrypted. Nothing is uploaded."));
   return nodes;
@@ -144,7 +180,7 @@ function composeView(notice?: string) {
 
 async function render(notice?: string) {
   if (job?.link && !job.ringing) qr = await QRCode.toDataURL(job.link, { margin: 1, width: 392, color: { dark: "#2f1b63", light: "#ffffff" } });
-  app.replaceChildren(...(job ? [jobView(job)] : composeView(notice)));
+  app.replaceChildren(...(job ? jobView(job) : composeView(notice)));
   if (job && notice) app.append(h("p", { class: "note" }, notice));
 }
 

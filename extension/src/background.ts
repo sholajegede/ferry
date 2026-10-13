@@ -46,6 +46,13 @@ chrome.runtime.onMessage.addListener((message: ToBackground | { to: "background"
     void ensureOffscreen().then(() => reply(true));
     return true;
   }
+  if (message.type === "download") {
+    // The offscreen page holds the file. Chrome saves it in the Downloads folder.
+    void chrome.downloads.download({ url: message.url, filename: message.filename, conflictAction: "uniquify" }).catch(() =>
+      chrome.downloads.download({ url: message.url, conflictAction: "uniquify" }),
+    );
+    return false;
+  }
   if (message.type === "job") {
     const job = message.job;
     const text = !job ? "" : job.status === "done" ? "✓" : job.status === "failed" ? "!" : "•";

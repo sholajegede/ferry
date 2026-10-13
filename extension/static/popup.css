@@ -43,3 +43,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .lock { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: #7d5cd6; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+.received { display: grid; gap: 10px; }
+.got { display: grid; gap: 4px; justify-items: start; padding-top: 10px; border-top: 1px solid var(--line); }
+.got:first-child { padding-top: 0; border-top: 0; }
+.what.text { -webkit-line-clamp: 6; font-weight: 500; }

@@ -1,11 +1,12 @@
 // Loads the Chrome extension and checks that it sends to a browser on another device.
 // Build it first with: FERRY_TEST_BRIDGE=http://localhost:4455 FERRY_SITE=http://localhost:3000 npm --prefix extension run build
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
 
 const base = process.env.E2E_URL ?? "http://localhost:3000";
+const photo = path.join(process.env.E2E_FILES ?? ".", "photo.bin");
 const extension = path.resolve("extension/dist");
 const results = [];
 const check = (name, pass, detail = "") => {
@@ -59,20 +60,51 @@ try {
   check("the phone receives the page link", true);
   await popup.getByText("Delivered.").waitFor({ timeout: 15000 });
   check("the popup says it was delivered", true);
+
+  // The phone that received the link sends a file back. This is what failed before.
+  await phone.locator('input[type="file"]').first().setInputFiles(photo);
+  await popup.getByText("saved in Downloads").waitFor({ timeout: 30000 });
+  const back = await worker.evaluate(async () => {
+    for (let i = 0; i < 50; i++) {
+      const [item] = await chrome.downloads.search({ state: "complete" });
+      if (item) return { name: item.filename, size: item.fileSize || item.bytesReceived, by: item.byExtensionName };
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return { all: await chrome.downloads.search({}) };
+  });
+  check("a file sent back from the phone is saved in Downloads", back?.by === "Ferry" && back.size === (await stat(photo)).size, `${back?.size} bytes`);
   const badge = await worker.evaluate(() => chrome.action.getBadgeText({}));
   check("the toolbar icon shows the result", badge === "✓", badge);
 
+  // Receive only: the phone opens the link and sends text.
+  await popup.getByRole("button", { name: "Start again" }).click();
+  await popup.getByRole("button", { name: "Receive from a phone" }).click();
+  await popup.locator(".code").waitFor({ timeout: 15000 });
+  const inboxLink = await worker.evaluate(async () => (await chrome.runtime.sendMessage({ to: "offscreen", type: "get" })).job.link);
+  await phone.goto(inboxLink);
+  await phone.getByLabel("Send text or a link").fill("the wifi password is ferry123");
+  await phone.getByRole("button", { name: "Send text" }).click();
+  await popup.getByText("the wifi password is ferry123").waitFor({ timeout: 20000 });
+  check("text from the phone shows in the popup", true);
+  if (process.env.E2E_SHOTS) await popup.screenshot({ path: `${process.env.E2E_SHOTS}/extension-received.png` });
+
   // Pairing, then a second send that needs no code.
-  await popup.getByRole("button", { name: "Send something else" }).click();
+  await popup.getByRole("button", { name: "End" }).click();
   await popup.getByRole("button", { name: "Remember a phone" }).click();
   await popup.locator(".code").waitFor({ timeout: 15000 });
   const pairLink = await worker.evaluate(async () => (await chrome.runtime.sendMessage({ to: "offscreen", type: "get" })).job.link);
   await phone.goto(pairLink);
-  await phone.getByRole("button", { name: /remember|yes/i }).first().click({ timeout: 20000 });
+  try {
+    await phone.getByRole("button", { name: /remember|yes/i }).first().click({ timeout: 20000 });
+  } catch (error) {
+    if (process.env.E2E_SHOTS) await phone.screenshot({ path: `${process.env.E2E_SHOTS}/extension-pair-phone.png`, fullPage: true });
+    if (process.env.E2E_SHOTS) await popup.screenshot({ path: `${process.env.E2E_SHOTS}/extension-pair-popup.png` });
+    throw error;
+  }
   await popup.getByText(/now remember each other/).waitFor({ timeout: 20000 });
   check("the extension and a phone remember each other", true);
 
-  await popup.getByRole("button", { name: "Send something else" }).click();
+  await popup.getByRole("button", { name: "Start again" }).click();
   await worker.evaluate(() => chrome.storage.session.set({ pending: { kind: "text", text: "pick up milk" }, pendingLabel: "pick up milk" }));
   await popup.reload();
   await phone.goto(base);
@@ -82,7 +114,7 @@ try {
   check("a remembered phone receives with no code", true);
 
   // An image, sent as a file. A data URL needs no site permission.
-  await popup.getByRole("button", { name: "Send something else" }).click();
+  await popup.getByRole("button", { name: "Start again" }).click();
   const pixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
   await worker.evaluate((url) => chrome.storage.session.set({ pending: { kind: "image", url, name: "dot.png" }, pendingLabel: "dot.png" }), pixel);
   await popup.reload();

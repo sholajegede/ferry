@@ -50,7 +50,7 @@ Ferry is a Next.js app (App Router) with a Convex backend, plus a command line t
 - **Offline mode.** Two devices on the same Wi-Fi or hotspot connect by scanning each other's QR codes. No server is contacted.
 - **Installable.** Ferry installs as an app and appears in the Android share sheet.
 - **Command line tool and HTTP API.** A terminal can send to a phone, and a build server can send to a browser.
-- **Chrome extension.** Send the page you are on, a link, selected text or an image to your phone with one click, or to a remembered phone with no code.
+- **Chrome extension.** Send the page you are on, a link, selected text or an image to your phone with one click, or to a remembered phone with no code. Files and text from the phone come back the same way.
 - **Usable by AI agents.** An MCP server and a JSON command line let an agent hand a file to a person, ask for one, or send to another agent.
 
 | Start a transfer | Join from a phone |
@@ -272,7 +272,7 @@ Agents can read [`llms.txt`](https://ferry.sholajegede.com/llms.txt), [`openapi.
 
 ## Chrome extension
 
-The extension in `extension/` sends the current page, a link, selected text or an image to another device. It runs the same protocol engine as the web app, inside an offscreen page, so a transfer keeps going after the popup closes.
+The extension in `extension/` sends the current page, a link, selected text or an image to another device, and saves what that device sends back in the Downloads folder. It runs the same protocol engine as the web app, inside an offscreen page, so a transfer keeps going after the popup closes.
 
 ```bash
 npm --prefix extension install

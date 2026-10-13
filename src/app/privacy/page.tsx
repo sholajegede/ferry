@@ -111,8 +111,9 @@ export default function PrivacyPage() {
       <h2>The Chrome extension</h2>
       <p>
         The extension reads the address and title of a tab only when you click its icon or its menu item. It reads an image only when
-        you send that image, and it asks for permission to read images from a site the first time. It stores a device ID, its secret
-        and your remembered devices in the extension&rsquo;s own storage. It keeps no history and has no analytics.
+        you send that image, and it asks for permission to read images from a site the first time. Files that your other device sends to it
+        are saved in your Downloads folder by Chrome. It stores a device ID, its secret and your remembered devices in the
+        extension&rsquo;s own storage. It keeps no history and has no analytics.
       </p>
 
       <h2>Offline mode</h2>
