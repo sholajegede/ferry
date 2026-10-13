@@ -11,6 +11,7 @@ import {
 } from "../../src/lib/protocol/room-controller";
 import type { SinkProvider } from "../../src/lib/protocol/types";
 import { diskSinks, loadIdentity, nodePlatform, sourcesFrom } from "./node-platform";
+import { addPaired, sealInvite, type PairedDevice } from "./paired";
 
 /**
  * One transfer, driven by code.
@@ -30,6 +31,7 @@ export type FerryEvent =
   | { event: "file_refused"; name: string; size: number; reason: string }
   | { event: "text"; from: string; text: string }
   | { event: "text_delivered"; text: string }
+  | { event: "paired"; device: string; device_id: string }
   | { event: "done"; ok: boolean; reason: EndReason; message: string; sent: number; received: number; failed: number; saved: string[] };
 
 export type EndReason =
@@ -91,6 +93,10 @@ export type SessionOptions = {
    * ask: a device with the code raises a join_request, and decide() answers it.
    */
   admit?: Admit;
+  /** Open a transfer and invite this remembered device into it, with no link passed by hand. */
+  ring?: PairedDevice;
+  /** A pairing session. The two devices remember each other, and the session ends when they have. */
+  pair?: boolean;
   /** End the session after this many milliseconds. */
   timeoutMs?: number;
   server?: string;
@@ -100,7 +106,7 @@ export type SessionOptions = {
 
 export class UsageError extends Error {}
 
-function connect(server: string | undefined): { backend: Backend; close: () => void } {
+export function connect(server: string | undefined): { backend: Backend; close: () => void } {
   const bridge = process.env.FERRY_TEST_BRIDGE;
   if (bridge) return { backend: bridgeBackend(bridge), close: () => undefined };
   if (!server) throw new UsageError("No server is set. Pass --server <your Convex URL> or set FERRY_SERVER.");
@@ -212,6 +218,12 @@ export class Session {
       });
       this.link = `${site}/room/${this.room}#k=${secret}`;
       this.code = created.code;
+      if (options.ring) {
+        const sealed = await sealInvite(options.ring, { roomId: this.room, secret });
+        await backend.mutation(api.pairs.ring, { ...creds, to: options.ring.id, sealed }).catch(() => {
+          throw new UsageError(`${options.ring!.name} no longer remembers this device. Pair the two again.`);
+        });
+      }
     }
 
     this.controller = new RoomController({
@@ -276,6 +288,7 @@ export class Session {
     if (!this.controller.sendNote(text)) this.pendingText.push(text);
   }
 
+  private pairedWith = new Set<string>();
   private textsOwed = 0;
   private textsIn = 0;
   private sentFiles = 0;
@@ -302,7 +315,24 @@ export class Session {
         joined.add(event.peerId);
         this.emit({ event: "connected", device: event.name, device_id: event.peerId });
         for (const text of this.pendingText.splice(0)) if (!controller.sendNote(text)) this.pendingText.push(text);
+        if (this.options.pair) {
+          // The device that joins asks first. The one that opened the transfer asks a little later,
+          // which covers a browser that joined and is waiting to be asked.
+          const ask = () => !this.pairedWith.has(event.peerId) && controller.askToPair(event.peerId);
+          this.timers.add(setTimeout(ask, this.role === "guest" ? 0 : 1500));
+        }
       }
+      // Only a pairing session says yes. In every other session a request to be remembered is declined.
+      if (event.type === "pair-ask") controller.answerPair(event.peerId, Boolean(this.options.pair));
+      if (event.type === "paired" && !this.pairedWith.has(event.peerId)) {
+        this.pairedWith.add(event.peerId);
+        void addPaired(event.peerId, event.name, event.seed).then(() => {
+          this.emit({ event: "paired", device: event.name, device_id: event.peerId });
+          // Give the other side a moment to store its half before the transfer closes.
+          if (this.options.pair && !this.options.keep) this.timers.add(setTimeout(() => void this.end("complete", `This device and ${event.name} now remember each other.`), 1200));
+        });
+      }
+      if (event.type === "pair-declined" && this.options.pair) void this.end("declined", `${event.name} did not agree to be remembered.`);
       if (event.type === "note" && event.note.direction === "in") {
         const from = this.state.peers.find((peer) => peer.id === event.note.peerId)?.name ?? "the other device";
         this.textsIn += 1;
@@ -384,7 +414,7 @@ export class Session {
    * and nothing is still coming in. A session that sends nothing waits for files or text to arrive.
    */
   private checkFinished(state: RoomState) {
-    if (this.options.keep || this.ended) return;
+    if (this.options.keep || this.options.pair || this.ended) return;
     const out = state.transfers.filter((t) => t.direction === "out");
     const incoming = state.transfers.filter((t) => t.direction === "in");
     const busy = [...out, ...incoming].some((t) => !settledStatus.includes(t.status));

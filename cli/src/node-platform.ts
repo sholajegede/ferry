@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import path from "node:path";
 import { RTCPeerConnection } from "node-datachannel/polyfill";
 import { randomId } from "../../src/lib/protocol/bytes";
@@ -8,9 +8,12 @@ import type { KeyRecord } from "../../src/lib/protocol/crypto";
 import type { Identity, Platform } from "../../src/lib/protocol/room-controller";
 import type { FileSource, SinkProvider } from "../../src/lib/protocol/types";
 
+const identityFile = () =>
+  path.join(process.env.XDG_CONFIG_HOME ?? path.join(homedir(), ".config"), "ferry", "device.json");
+
 export async function loadIdentity(): Promise<Identity> {
-  const dir = path.join(process.env.XDG_CONFIG_HOME ?? path.join(homedir(), ".config"), "ferry");
-  const file = path.join(dir, "device.json");
+  const file = identityFile();
+  const dir = path.dirname(file);
   try {
     const parsed = JSON.parse(await readFile(file, "utf8")) as Identity;
     if (parsed.deviceId && parsed.deviceSecret) return parsed;
@@ -18,11 +21,19 @@ export async function loadIdentity(): Promise<Identity> {
   const identity: Identity = {
     deviceId: randomId(16),
     deviceSecret: randomId(32),
-    name: `Terminal on ${process.env.HOSTNAME ?? process.platform}`.slice(0, 40),
+    name: `Terminal on ${hostname().replace(/\.local$/, "") || process.platform}`.slice(0, 40),
   };
   await mkdir(dir, { recursive: true, mode: 0o700 });
   await writeFile(file, JSON.stringify(identity), { mode: 0o600 });
   return identity;
+}
+
+/** Change the name other devices see for this one. */
+export async function setDeviceName(name: string): Promise<Identity> {
+  const identity = await loadIdentity();
+  const next = { ...identity, name: name.trim().slice(0, 40) };
+  await writeFile(identityFile(), JSON.stringify(next), { mode: 0o600 });
+  return next;
 }
 
 export async function sourcesFrom(inputs: string[]): Promise<FileSource[]> {

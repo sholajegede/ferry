@@ -1,0 +1,22 @@
+{
+  "name": "ferry-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Send a page, a link, text or an image from Chrome to your phone with Ferry.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "zip": "node build.mjs --zip"
+  },
+  "dependencies": {
+    "convex": "^1.46.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.4",
+    "@types/qrcode": "^1.5.5",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.2"
+  },
+  "license": "MIT"
+}

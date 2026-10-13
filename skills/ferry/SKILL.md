@@ -26,6 +26,10 @@ Use the MCP tools if a `ferry` MCP server is connected. If not, use the command 
 
 One agent runs `send` and passes the link to the other through the channel they already share. The other runs `npx -y ferry-send receive "<link>" --json --out <folder>`.
 
+## Send to a remembered device
+
+If `npx -y ferry-send devices --json` lists the device, send with `npx -y ferry-send send <paths> --to-device "<name>" --json`. No link is needed. The other device must be running `ferry listen`, or have Ferry open in a browser.
+
 ## Rules
 
 - A link lets a device in. The 6-digit code alone does not, unless you pass `--admit any`. Do not pass it unless the person asks for the code.

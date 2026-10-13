@@ -1,6 +1,6 @@
 {
   "name": "ferry-send",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Send and receive end-to-end encrypted files from the terminal, a script or an AI agent.",
   "type": "module",
   "bin": {

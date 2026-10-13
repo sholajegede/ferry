@@ -32,7 +32,8 @@ export default function AgentsPage() {
           <strong>Get a file from a person.</strong> The agent opens a transfer and waits. You open the link and drop the file in.
         </li>
         <li>
-          <strong>Send to another agent.</strong> Two agents on different machines exchange files with no person in the middle.
+          <strong>Send to another agent.</strong> Two agents on different machines exchange files with no person in the middle. After
+          they pair once, they need no link.
         </li>
       </ul>
 
@@ -48,7 +49,7 @@ export default function AgentsPage() {
   }
 }`}</code>
       </pre>
-      <p>The server has six tools:</p>
+      <p>The server has nine tools:</p>
       <ul>
         <li>
           <code>send_files</code> sends files, folders or a text note. It returns a link and a 6-digit code at once.
@@ -69,6 +70,11 @@ export default function AgentsPage() {
         <li>
           <code>cancel_transfer</code> stops a transfer.
         </li>
+        <li>
+          <code>pair_device</code>, <code>list_devices</code> and <code>forget_device</code> manage remembered devices. After two
+          devices pair, <code>send_files</code> with <code>to_device</code> and <code>receive_files</code> with{" "}
+          <code>from_device</code> need no link.
+        </li>
       </ul>
 
       <h2 id="json">JSON command line</h2>
@@ -86,7 +92,9 @@ export default function AgentsPage() {
       <pre>
         <code>{`npx -y ${pkg} receive --json --out ./incoming --max-size 500MB
 npx -y ${pkg} receive "<link>" --json --out ./incoming
-npx -y ${pkg} send build.zip --to "<link>" --json`}</code>
+npx -y ${pkg} send build.zip --to "<link>" --json
+npx -y ${pkg} pair --json                     # once, on each machine
+npx -y ${pkg} send build.zip --to-device laptop --json`}</code>
       </pre>
       <p>
         Exit codes: 0 finished, 1 a file was not transferred, 2 wrong usage, 3 the time limit passed, 4 the transfer could not be

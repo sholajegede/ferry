@@ -22,8 +22,8 @@ const sha = async (file) => createHash("sha256").update(await readFile(file)).di
 const temp = (name) => mkdtemp(path.join(tmpdir(), `ferry-${name}-`));
 
 /** Each device needs its own identity, so each run gets its own config folder. */
-async function run(args, { input, raw = false } = {}) {
-  const config = await temp("cfg");
+async function run(args, { input, raw = false, config } = {}) {
+  config ??= await temp("cfg");
   const child = spawn("node", [cli, ...args], { env: { ...env, XDG_CONFIG_HOME: config } });
   const events = [];
   const chunks = [];
@@ -132,10 +132,10 @@ await step("pipes", async () => {
 });
 
 await step("mcp", async () => {
-  const connect = async (root) => {
+  const connect = async (root, config) => {
     const client = new Client({ name: "test", version: "1" });
     await client.connect(
-      new StdioClientTransport({ command: "node", args: [cli, "mcp", "--root", root], env: { ...env, XDG_CONFIG_HOME: await temp("cfg") } }),
+      new StdioClientTransport({ command: "node", args: [cli, "mcp", "--root", root], env: { ...env, XDG_CONFIG_HOME: config ?? (await temp("cfg")) } }),
     );
     return client;
   };
@@ -150,7 +150,11 @@ await step("mcp", async () => {
   const b = await connect(rootB);
 
   const tools = (await a.listTools()).tools.map((tool) => tool.name).sort();
-  check("the MCP server lists its tools", tools.join(",") === "admit_device,cancel_transfer,receive_files,send_files,send_text,transfer_status", tools.join(", "));
+  check(
+    "the MCP server lists its tools",
+    tools.join(",") === "admit_device,cancel_transfer,forget_device,list_devices,pair_device,receive_files,send_files,send_text,transfer_status",
+    tools.join(", "),
+  );
 
   const outside = await call(a, "send_files", { paths: [photo] });
   check("a path outside the root folder is refused", outside.isError && /outside/.test(outside.error), outside.error);
@@ -172,6 +176,82 @@ await step("mcp", async () => {
   const open = await call(a, "receive_files", {});
   const cancelled = await call(a, "cancel_transfer", { transfer_id: open.transfer_id });
   check("a transfer can be cancelled", cancelled.result?.reason === "stopped");
+  await a.close();
+  await b.close();
+});
+
+await step("remembered devices", async () => {
+  const configA = await temp("cfg-a");
+  const configB = await temp("cfg-b");
+  const a = await run(["pair", "--json", "--device-name", "agent-a"], { config: configA });
+  const ready = await a.event("ready");
+  const b = await run(["pair", ready.link, "--json", "--device-name", "agent-b"], { config: configB });
+  const [pairedA, pairedB] = await Promise.all([a.event("paired"), b.event("paired")]);
+  const codes = await Promise.all([a.exited, b.exited]);
+  check("two terminals pair with one link", pairedA.device === "agent-b" && pairedB.device === "agent-a" && codes.every((code) => code === 0), codes.join(" and "));
+
+  const listed = await run(["devices", "--json"], { config: configA });
+  await listed.exited;
+  check("ferry devices lists the remembered device", listed.events[0]?.name === "agent-b");
+
+  const out = await temp("listen");
+  const listener = await run(["listen", "--once", "--json", "--out", out], { config: configB });
+  await listener.event("listening");
+  const sender = await run(["send", photo, "--to-device", "agent-b", "--json"], { config: configA });
+  const [sendCode, listenCode] = await Promise.all([sender.exited, listener.exited]);
+  const saved = listener.events.find((event) => event.event === "file_saved");
+  check("a remembered device receives with no link and no code", sendCode === 0 && listenCode === 0 && saved && (await sha(saved.path)) === (await sha(photo)), `exit ${sendCode} and ${listenCode}`);
+
+  const stranger = await run(["send", photo, "--to-device", "agent-z", "--json"], { config: configA });
+  check("sending to a device that is not remembered is refused", (await stranger.exited) === 2, stranger.events[0]?.message);
+
+  const forgot = await run(["forget", "agent-b", "--json"], { config: configA });
+  await forgot.exited;
+  const after = await run(["devices", "--json"], { config: configA });
+  await after.exited;
+  check("ferry forget removes the device", after.events.length === 0);
+});
+
+await step("remembered devices over mcp", async () => {
+  const call = async (client, name, args) => {
+    const result = await client.callTool({ name, arguments: args });
+    return { ...JSON.parse(result.content[0].text), isError: result.isError };
+  };
+  const mcp = async (root, config) => {
+    const client = new Client({ name: "test", version: "1" });
+    await client.connect(new StdioClientTransport({ command: "node", args: [cli, "mcp", "--root", root], env: { ...env, XDG_CONFIG_HOME: config } }));
+    return client;
+  };
+  const rootA = await temp("pa");
+  const rootB = await temp("pb");
+  await copyFile(photo, path.join(rootA, "photo.bin"));
+  const configA = await temp("cfg-pa");
+  const configB = await temp("cfg-pb");
+  await (await run(["devices", "--device-name", "mcp-a"], { config: configA })).exited;
+  await (await run(["devices", "--device-name", "mcp-b"], { config: configB })).exited;
+  const a = await mcp(rootA, configA);
+  const b = await mcp(rootB, configB);
+
+  const opened = await call(a, "pair_device", {});
+  const joined = await call(b, "pair_device", { link: opened.link });
+  let left = opened;
+  let right = joined;
+  for (let i = 0; i < 12 && !(left.result && right.result); i++) {
+    [left, right] = await Promise.all([
+      call(a, "transfer_status", { transfer_id: opened.transfer_id, wait_seconds: 3 }),
+      call(b, "transfer_status", { transfer_id: joined.transfer_id, wait_seconds: 3 }),
+    ]);
+  }
+  const listed = await call(a, "list_devices", {});
+  check("two agents pair over MCP", left.result?.ok && right.result?.ok && listed.devices?.[0]?.name === "mcp-b", left.result?.message);
+
+  const waiting = await call(b, "receive_files", { from_device: "mcp-a", out_dir: "inbox" });
+  check("receive_files can wait for a remembered device", waiting.status === "waiting_for_device", waiting.status);
+  const sent = await call(a, "send_files", { paths: ["photo.bin"], to_device: "mcp-b" });
+  let got = waiting;
+  for (let i = 0; i < 20 && !got.result; i++) got = await call(b, "transfer_status", { transfer_id: waiting.transfer_id, wait_seconds: 5 });
+  const file = got.saved_files?.[0];
+  check("an agent sends to a remembered agent with no link", sent.link && got.result?.ok && file && (await sha(file)) === (await sha(photo)), got.result?.message);
   await a.close();
   await b.close();
 });

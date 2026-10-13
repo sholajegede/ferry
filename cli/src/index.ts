@@ -6,8 +6,12 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
 import QRCode from "qrcode";
+import { api } from "../../convex/_generated/api";
 import { serveMcp } from "./mcp";
-import { EXIT, Session, UsageError, type Admit, type FerryEvent } from "./session";
+import { setDeviceName } from "./node-platform";
+import { findPaired, listPaired, removePaired, watchRings } from "./paired";
+import { connect, EXIT, Session, UsageError, type Admit, type FerryEvent } from "./session";
+import { loadIdentity } from "./node-platform";
 
 declare const __DEFAULT_SERVER__: string;
 declare const __DEFAULT_SITE__: string;
@@ -22,6 +26,13 @@ Usage
   ferry send -                     Send what arrives on standard input (name it with --name)
   ferry receive <code or link>     Receive files into the current folder
   ferry receive                    Open a transfer and wait for another device to send files
+  ferry pair                       Open a transfer that makes two devices remember each other
+  ferry pair <code or link>        Join one, so this device and that one remember each other
+  ferry devices                    List the devices this one remembers
+  ferry forget <device>            Stop remembering a device
+  ferry send <files>... --to-device <device>
+                                   Send to a remembered device, with no link or code
+  ferry listen                     Wait for remembered devices to send, and save what they send
   ferry mcp                        Run as an MCP server for AI agents
 
 Options
@@ -39,6 +50,9 @@ Options
   --stdout           With receive: write the received file to standard output
   --name <name>      With "send -": the file name for the data on standard input
   --root <folder>    With mcp: the folder the server may read from and write to
+  --from <device>    With listen: take transfers from this device only
+  --once             With listen: stop after the first transfer
+  --device-name <n>  Set the name other devices see for this one
   --server <url>     Convex deployment URL of your own Ferry
   --site <url>       Web address of your own Ferry
   -v, --version      Print the version
@@ -69,6 +83,86 @@ export function parseSize(text: string): number {
 
 const spaced = (code: string) => `${code.slice(0, 3)} ${code.slice(3)}`;
 
+/** Wait for remembered devices to start transfers, and receive each one. */
+async function listen(options: {
+  server: string;
+  site: string;
+  json: boolean;
+  from?: string;
+  once: boolean;
+  outDir?: string;
+  maxBytes?: number;
+  timeoutMs?: number;
+}) {
+  const from = options.from
+    ? await findPaired(options.from).catch((error: Error) => {
+        throw new UsageError(error.message);
+      })
+    : undefined;
+  if ((await listPaired()).length === 0) throw new UsageError("No device is remembered yet. Run ferry pair first.");
+  const identity = await loadIdentity();
+  const { backend, close } = connect(options.server);
+  await backend.mutation(api.devices.register, identity);
+  const print = (event: Record<string, unknown>) =>
+    process.stdout.write(options.json ? `${JSON.stringify(event)}\n` : "");
+  const say = (line: string) => void (!options.json && process.stdout.write(`${line}\n`));
+  const active = new Set<Session>();
+  let finished: (code: number) => void = () => undefined;
+  const ended = new Promise<number>((resolve) => (finished = resolve));
+  let busy = false;
+
+  say(`Listening for ${from ? from.name : "remembered devices"} as ${identity.name}. Press Ctrl+C to stop.`);
+  print({ event: "listening", device: identity.name, from: from?.name ?? null });
+
+  const stop = watchRings(backend, identity, {
+    from,
+    since: Date.now() - 120_000,
+    onRing: (ring) => {
+      if (options.once && busy) return;
+      busy = true;
+      say(`${ring.from.name} is sending`);
+      print({ event: "incoming", device: ring.from.name, device_id: ring.from.id });
+      void Session.open({
+        target: `${options.site || "https://ferry"}/room/${ring.roomId}#k=${ring.secret}`,
+        outDir: options.outDir,
+        maxBytes: options.maxBytes,
+        admit: "link",
+        server: options.server,
+        onEvent: (event) => {
+          if (event.event === "progress") return;
+          print({ ...event, device: ring.from.name });
+          if (event.event === "file_saved") say(`Saved ${path.relative(process.cwd(), event.path) || event.path}`);
+          if (event.event === "text") say(`Text from ${ring.from.name}: ${event.text}`);
+          if (event.event === "file_refused") say(`Refused ${event.name}. ${event.reason}`);
+        },
+      }).then(
+        (session) => {
+          active.add(session);
+          void session.result.then((done) => {
+            active.delete(session);
+            if (!done.ok) say(done.message);
+            if (options.once) finished(EXIT[done.reason]);
+          });
+        },
+        (error: Error) => {
+          say(error.message);
+          if (options.once) finished(4);
+        },
+      );
+    },
+  });
+
+  const quit = (code: number) => finished(code);
+  process.on("SIGINT", () => quit(130));
+  process.on("SIGTERM", () => quit(130));
+  if (options.timeoutMs) setTimeout(() => quit(3), options.timeoutMs);
+  const code = await ended;
+  stop();
+  await Promise.all([...active].map((session) => session.stop()));
+  close();
+  process.exit(code);
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -85,6 +179,10 @@ async function main() {
       stdout: { type: "boolean", default: false },
       name: { type: "string" },
       root: { type: "string" },
+      "to-device": { type: "string" },
+      from: { type: "string" },
+      once: { type: "boolean", default: false },
+      "device-name": { type: "string" },
       server: { type: "string" },
       site: { type: "string" },
       version: { type: "boolean", short: "v", default: false },
@@ -102,7 +200,49 @@ async function main() {
     await serveMcp({ server, site, root: path.resolve(values.root ?? process.env.FERRY_ROOT ?? "."), version: __VERSION__ });
     return;
   }
-  if (command !== "send" && command !== "receive") throw new UsageError(`Unknown command "${command}". Run ferry --help.`);
+  if (values["device-name"]) await setDeviceName(values["device-name"]);
+
+  if (command === "devices") {
+    const devices = await listPaired();
+    if (values.json) {
+      for (const device of devices) process.stdout.write(`${JSON.stringify({ event: "device", name: device.name, device_id: device.id, paired_at: new Date(device.at).toISOString() })}\n`);
+    } else if (devices.length === 0) {
+      process.stdout.write("No device is remembered yet. Run ferry pair.\n");
+    } else {
+      for (const device of devices) process.stdout.write(`${device.name}  ${device.id.slice(0, 8)}  paired ${new Date(device.at).toLocaleDateString()}\n`);
+    }
+    return;
+  }
+
+  if (command === "forget") {
+    if (!rest[0]) throw new UsageError("Name the device to forget. Run ferry devices to see them.");
+    const device = await findPaired(rest[0]).catch((error: Error) => {
+      throw new UsageError(error.message);
+    });
+    await removePaired(device.id);
+    const identity = await loadIdentity();
+    const { backend, close } = connect(server);
+    await backend.mutation(api.pairs.unlink, { deviceId: identity.deviceId, deviceSecret: identity.deviceSecret, peer: device.id }).catch(() => undefined);
+    close();
+    process.stdout.write(values.json ? `${JSON.stringify({ event: "forgotten", name: device.name, device_id: device.id })}\n` : `This device no longer remembers ${device.name}.\n`);
+    return;
+  }
+
+  if (command === "listen") {
+    await listen({
+      server,
+      site,
+      json: values.json,
+      from: values.from,
+      once: values.once,
+      outDir: values.out,
+      maxBytes: values["max-size"] ? parseSize(values["max-size"]) : undefined,
+      timeoutMs: values.timeout ? Number(values.timeout) * 1000 : undefined,
+    });
+    return;
+  }
+
+  if (command !== "send" && command !== "receive" && command !== "pair") throw new UsageError(`Unknown command "${command}". Run ferry --help.`);
 
   const json = values.json;
   const interactive = !json && Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -134,6 +274,9 @@ async function main() {
       paths = [file];
     }
     if (paths.length === 0 && !values.text) throw new UsageError("Name at least one file or folder to send, or pass --text.");
+    if (values["to-device"] && target) throw new UsageError("Use --to or --to-device, not both.");
+  } else if (command === "pair") {
+    target = rest[0];
   } else {
     target = rest[0];
     if (values.stdout) {
@@ -187,6 +330,10 @@ async function main() {
         clear();
         say(`Text from ${event.from}: ${event.text}`);
         break;
+      case "paired":
+        clear();
+        say(`This device and ${event.device} now remember each other. Send to it with --to-device "${event.device}".`);
+        break;
       case "text_delivered":
         clear();
         say("Text delivered");
@@ -202,8 +349,16 @@ async function main() {
     }
   };
 
+  const ring = values["to-device"]
+    ? await findPaired(values["to-device"]).catch((error: Error) => {
+        throw new UsageError(error.message);
+      })
+    : undefined;
+
   session = await Session.open({
     paths,
+    ring,
+    pair: command === "pair",
     text: values.text,
     target,
     outDir,
@@ -220,6 +375,8 @@ async function main() {
 
   if (json) {
     process.stdout.write(`${JSON.stringify(session.events.find((event) => event.event === "ready"))}\n`);
+  } else if (ring) {
+    say(`Asked ${ring.name} to receive. It takes the transfer when Ferry is open on it, or when it runs ferry listen.`);
   } else if (session.link && session.code) {
     status.write(await QRCode.toString(session.link, { type: "terminal", small: true }));
     const total = session.events.find((event) => event.event === "ready");
@@ -229,7 +386,9 @@ async function main() {
         ? `\nSending ${files.length} ${files.length === 1 ? "file" : "files"} (${size(files.reduce((sum, file) => sum + file.size, 0))})`
         : command === "receive"
           ? `\nWaiting for files. They are saved in ${session.outDir}`
-          : "\nSending a text note") +
+          : command === "pair"
+            ? "\nOpen this on the other device. The two devices will remember each other"
+            : "\nSending a text note") +
         `\nLink  ${session.link}\nCode  ${spaced(session.code)}  (enter it at ${site.replace(/\/$/, "")})\n\n` +
         "Waiting for the other device. Press Ctrl+C to stop.",
     );

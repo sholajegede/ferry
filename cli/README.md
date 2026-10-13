@@ -21,6 +21,10 @@ Requires Node.js 22 or later.
 | `ferry send - --name data.json` | Sends what arrives on standard input. |
 | `ferry receive <code or link>` | Receives files into the current folder. |
 | `ferry receive` | Opens a transfer and waits for another device to send files. |
+| `ferry pair` | Opens a transfer that makes two devices remember each other. `ferry pair <link>` joins one. |
+| `ferry devices` | Lists the devices this one remembers. `ferry forget <device>` removes one. |
+| `ferry send <files>... --to-device <device>` | Sends to a remembered device, with no link or code. |
+| `ferry listen` | Waits for remembered devices to send, and saves what they send. `--from` and `--once` narrow it. |
 | `ferry mcp` | Runs as an MCP server for AI agents. |
 
 ## Options
@@ -32,6 +36,7 @@ Requires Node.js 22 or later.
 - `--keep` stays open after the first exchange finishes.
 - `--json` prints one JSON event on each line and never prompts.
 - `--stdout` writes the received file to standard output. Status lines go to standard error.
+- `--device-name <name>` sets the name other devices see for this one.
 - `--server <url>` and `--site <url>` point the tool at your own deployment. `FERRY_SERVER` and `FERRY_SITE` do the same.
 
 ## Scripts and agents
@@ -51,7 +56,7 @@ ferry send build.tar.gz --json
 ferry receive "https://…/room/…#k=…" --json --out ./incoming
 ```
 
-Events: `ready`, `connected`, `join_request`, `security_code`, `progress`, `file_sent`, `file_saved`, `file_refused`, `text`, `text_delivered`, `done`. A usage mistake prints one `error` event.
+Events: `ready`, `connected`, `paired`, `join_request`, `security_code`, `progress`, `file_sent`, `file_saved`, `file_refused`, `text`, `text_delivered`, `done`. A usage mistake prints one `error` event.
 
 | Exit code | Meaning |
 | --- | --- |
@@ -92,6 +97,11 @@ ferry receive "<link>" --stdout | psql mydb        # on the other
 | `admit_device` | Answers a device that asked to join with the 6-digit code. |
 | `send_text` | Sends a text note into an open transfer. |
 | `cancel_transfer` | Stops a transfer. |
+| `pair_device` | Makes this machine and another device remember each other. |
+| `list_devices` | Lists the remembered devices. |
+| `forget_device` | Stops remembering a device. |
+
+`send_files` takes `to_device` to send to a remembered device, and `receive_files` takes `from_device` to wait for one. Neither needs a link.
 
 What the server will not do:
 
@@ -101,6 +111,19 @@ What the server will not do:
 - Admit a device that has only the 6-digit code, unless the agent sets `allow_code_join` and then calls `admit_device`.
 
 A transfer ends by itself after 15 minutes if nothing finishes it. The agent can set `timeout_seconds`.
+
+## Remembered devices
+
+Two machines that pair once can send to each other with no link:
+
+```bash
+ferry pair --device-name build-server     # prints a link
+ferry pair "<link>" --device-name laptop  # on the other machine
+ferry listen --out ./incoming             # on the laptop: wait and save
+ferry send dist.zip --to-device laptop    # on the build server
+```
+
+The two devices share a key. To start a transfer, the sender seals the room details with that key and leaves them on the server for the other device, which cannot read them. A phone that paired with the Ferry site works the same way. It gets a prompt when Ferry is open on it.
 
 ## What it cannot do
 

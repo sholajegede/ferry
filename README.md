@@ -50,6 +50,7 @@ Ferry is a Next.js app (App Router) with a Convex backend, plus a command line t
 - **Offline mode.** Two devices on the same Wi-Fi or hotspot connect by scanning each other's QR codes. No server is contacted.
 - **Installable.** Ferry installs as an app and appears in the Android share sheet.
 - **Command line tool and HTTP API.** A terminal can send to a phone, and a build server can send to a browser.
+- **Chrome extension.** Send the page you are on, a link, selected text or an image to your phone with one click, or to a remembered phone with no code.
 - **Usable by AI agents.** An MCP server and a JSON command line let an agent hand a file to a person, ask for one, or send to another agent.
 
 | Start a transfer | Join from a phone |
@@ -229,7 +230,7 @@ The build reads `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_SITE_URL` from `.env.l
 
 An agent can use Ferry without a person at the keyboard. There are two ways in, and both are in the `ferry-send` package.
 
-**The MCP server.** `ferry mcp --root <folder>` gives an agent six tools: `send_files`, `receive_files`, `transfer_status`, `admit_device`, `send_text` and `cancel_transfer`. `send_files` returns a link at once, so the agent can show it to a person while the transfer waits.
+**The MCP server.** `ferry mcp --root <folder>` gives an agent nine tools: `send_files`, `receive_files`, `transfer_status`, `admit_device`, `send_text`, `cancel_transfer`, `pair_device`, `list_devices` and `forget_device`. `send_files` returns a link at once, so the agent can show it to a person while the transfer waits.
 
 ```json
 {
@@ -249,6 +250,17 @@ ferry send build.zip --to "<link>" --json        # send into a transfer that is 
 pg_dump mydb | ferry send - --name mydb.sql      # pipes work in both directions
 ```
 
+Two machines can also remember each other, so later transfers need no link:
+
+```bash
+ferry pair --device-name build-server           # on one machine. Prints a link
+ferry pair "<link>" --device-name laptop        # on the other
+ferry listen --out ./incoming                   # wait for remembered devices to send
+ferry send build.zip --to-device laptop         # from the build server, with no link
+```
+
+The MCP server has the same: `pair_device`, `list_devices`, `forget_device`, `send_files` with `to_device`, and `receive_files` with `from_device`.
+
 Rules for unattended use:
 
 - The MCP server reads and writes only inside its root folder.
@@ -257,6 +269,18 @@ Rules for unattended use:
 - An MCP transfer ends by itself after 15 minutes.
 
 Agents can read [`llms.txt`](https://ferry.sholajegede.com/llms.txt), [`openapi.json`](public/openapi.json) and the skill file in [`skills/ferry/SKILL.md`](skills/ferry/SKILL.md). The [agents page](https://ferry.sholajegede.com/agents) has the same content for people.
+
+## Chrome extension
+
+The extension in `extension/` sends the current page, a link, selected text or an image to another device. It runs the same protocol engine as the web app, inside an offscreen page, so a transfer keeps going after the popup closes.
+
+```bash
+npm --prefix extension install
+npm --prefix extension run build   # load extension/dist in chrome://extensions
+npm --prefix extension run zip     # the file for the Chrome Web Store
+```
+
+A browser and a phone can remember each other once. After that, "Send to <phone>" seals the room details with the key the two devices share and leaves them for the phone, so no code is needed. See [extension/README.md](extension/README.md) for the permissions and the limits.
 
 ## HTTP API
 
@@ -328,6 +352,7 @@ The transfer screen shows whether a connection is direct or relayed.
 | `public/sw.js` | Service worker: offline shell and the share target |
 | `cli/` | The command line tool and the MCP server |
 | `skills/` | A skill file that tells an agent how to use Ferry |
+| `extension/` | The Chrome extension |
 | `scripts/` | Setup and share-image scripts |
 | `tests/` | Protocol, backend, browser, command line and agent tests |
 

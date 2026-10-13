@@ -47,6 +47,11 @@ next-env.d.ts
 /cli/dist
 /cli/node_modules
 
+# extension build output
+/extension/dist
+/extension/node_modules
+/extension/*.zip
+
 # local working notes
 BUILD_PLAN.md
 BUILD_LOG.md

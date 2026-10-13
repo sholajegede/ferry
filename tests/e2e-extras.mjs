@@ -66,7 +66,10 @@ function readZip(buffer) {
       const length = extra.readUInt16LE(x + 2);
       if (id === 1) {
         let y = x + 4;
-        if (size === 0xffffffff) (size = Number(extra.readBigUInt64LE(y))), (y += 8);
+        if (size === 0xffffffff) {
+          size = Number(extra.readBigUInt64LE(y));
+          y += 8;
+        }
         if (buffer.readUInt32LE(at + 20) === 0xffffffff) y += 8;
         if (local === 0xffffffff) local = Number(extra.readBigUInt64LE(y));
       }

@@ -108,6 +108,13 @@ export default function PrivacyPage() {
         operator signed in to the admin page.
       </p>
 
+      <h2>The Chrome extension</h2>
+      <p>
+        The extension reads the address and title of a tab only when you click its icon or its menu item. It reads an image only when
+        you send that image, and it asks for permission to read images from a site the first time. It stores a device ID, its secret
+        and your remembered devices in the extension&rsquo;s own storage. It keeps no history and has no analytics.
+      </p>
+
       <h2>Offline mode</h2>
       <p>
         Offline mode does not contact the server. The two devices exchange connection details

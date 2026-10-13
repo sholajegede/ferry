@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Ferry",
+  "short_name": "Ferry",
+  "version": "0.1.0",
+  "description": "Send this page, a link, text or an image to your phone. End-to-end encrypted, with no account and no upload.",
+  "homepage_url": "https://ferry.sholajegede.com",
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "action": {
+    "default_title": "Send with Ferry",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
+  },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["activeTab", "contextMenus", "offscreen", "storage"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "minimum_chrome_version": "127"
+}

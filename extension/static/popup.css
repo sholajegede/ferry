@@ -1,0 +1,45 @@
+@font-face { font-family: "Hanken"; src: url("fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+:root {
+  --paper: #fcf9f5; --sunken: #f1ecfd; --ink: #714bd0; --deep: #4f2f9b; --line: #d6cbf3;
+  --ok: #007f4a; --mint: #e3f2e9; --danger: #b3261e; --danger-soft: #fdecea;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { width: 360px; background: var(--paper); color: var(--deep); font: 14px/1.45 "Hanken", system-ui, sans-serif; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 20px; letter-spacing: -0.02em; color: var(--ink); }
+header a { color: var(--ink); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+main { padding: 16px; display: grid; gap: 12px; }
+.eyebrow { font: 600 10.5px/1 ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); margin: 0 0 6px; }
+.card { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 14px; min-width: 0; }
+.what { margin: 0; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sub { margin: 4px 0 0; color: #7d5cd6; font-size: 12.5px; overflow-wrap: anywhere; }
+button { white-space: nowrap; font: 600 11.5px/1 ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; border-radius: 999px; height: 40px; padding: 0 16px; border: 1px solid var(--ink); background: transparent; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+button.primary { background: var(--ink); color: var(--paper); }
+button.primary:hover { background: var(--deep); }
+button:not(.primary):hover { background: var(--sunken); }
+button.small { height: 30px; font-size: 10.5px; width: auto; padding: 0 12px; }
+button:disabled { opacity: 0.5; cursor: default; }
+.row { display: flex; gap: 8px; }
+.row button { font-size: 10.5px; letter-spacing: 0.1em; padding: 0 10px; }
+.devices { display: grid; gap: 8px; }
+.device { display: flex; align-items: center; gap: 8px; }
+.device button.primary { flex: 1; }
+.forget { border: 0; width: auto; height: 30px; padding: 0 6px; color: #7d5cd6; text-transform: none; letter-spacing: 0; font: 12px "Hanken", system-ui, sans-serif; text-decoration: underline; }
+.forget:hover { background: none !important; color: var(--deep); }
+.qr { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.qr img { width: 196px; height: 196px; border-radius: 12px; border: 1px solid var(--line); background: #fff; padding: 6px; image-rendering: pixelated; }
+.code { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+.status { display: flex; align-items: center; gap: 8px; font-weight: 600; margin: 0; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); flex: none; animation: pulse 1.4s ease-in-out infinite; }
+.done .dot { background: var(--ok); animation: none; }
+.failed .dot { background: var(--danger); animation: none; }
+.done { color: var(--ok); }
+.failed { color: var(--danger); }
+.bar { height: 6px; border-radius: 99px; background: var(--sunken); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ink); }
+.note { margin: 0; font-size: 12px; color: #7d5cd6; }
+.lock { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: #7d5cd6; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
