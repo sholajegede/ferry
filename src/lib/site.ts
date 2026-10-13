@@ -8,6 +8,8 @@ export const site = {
   contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "",
   cliPackage: "ferry-send",
   repo: "https://github.com/sholajegede/ferry",
+  /** The Chrome Web Store page of the extension. Empty until the listing is live. */
+  chromeExtension: process.env.NEXT_PUBLIC_CHROME_EXTENSION_URL ?? "",
   productHunt: process.env.NEXT_PUBLIC_PRODUCT_HUNT_URL ?? "",
   productHuntAt: process.env.NEXT_PUBLIC_PRODUCT_HUNT_AT ?? "",
 };

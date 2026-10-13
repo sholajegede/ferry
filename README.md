@@ -14,6 +14,10 @@
   ·
   <a href="https://ferry.sholajegede.com/developers">CLI and API</a>
   ·
+  <a href="https://ferry.sholajegede.com/agents">For AI agents</a>
+  ·
+  <a href="https://ferry.sholajegede.com/extension">Chrome extension</a>
+  ·
   <a href="https://ferry.sholajegede.com/compare">Comparisons</a>
 </p>
 
@@ -22,6 +26,7 @@
   <img src="https://img.shields.io/badge/Next.js-16-2f1b63" alt="Next.js 16">
   <img src="https://img.shields.io/badge/Convex-backend-c05100" alt="Convex backend">
   <img src="https://img.shields.io/badge/WebRTC-peer%20to%20peer-007f4a" alt="WebRTC peer to peer">
+  <a href="https://www.npmjs.com/package/ferry-send"><img src="https://img.shields.io/npm/v/ferry-send?color=714bd0&label=npm" alt="ferry-send on npm"></a>
 </p>
 
 ![A transfer in progress between a laptop and a phone](docs/transfer.png)
@@ -32,7 +37,7 @@ Ferry moves files between two devices that are both open at the same time. One d
 
 The server only introduces the devices to each other. It never receives a file, a file name or an encryption key.
 
-Ferry is a Next.js app (App Router) with a Convex backend, plus a command line tool that speaks the same protocol.
+Ferry is a Next.js app (App Router) with a Convex backend. Three more clients speak the same protocol: a command line tool, an MCP server for AI agents (both in the `ferry-send` npm package), and a Chrome extension.
 
 ## Features
 
@@ -207,6 +212,7 @@ Then open `https://<your computer's IP>:3000` on the phone and accept the self-s
 | `ANALYTICS_KEY` | Web app and Convex | Lets the admin page read usage statistics |
 | `ADMIN_PASSWORD` | Web app | Password for `/admin`, 12 characters or more |
 | `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` | Web app | Shown on the privacy and terms pages |
+| `NEXT_PUBLIC_CHROME_EXTENSION_URL` | Web app | The Chrome Web Store page, linked from `/extension` |
 | `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN` | Convex | Optional Cloudflare relay |
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Convex | Optional relay on any TURN server |
 
@@ -222,7 +228,7 @@ node cli/dist/index.js receive 482107 --out ~/Downloads
 
 `send` prints a QR code, a link and a 6-digit code, and exits when every file has arrived. `receive` takes the code or the link. With no code, `receive` opens a transfer and waits for another device to send files.
 
-The package in `cli/` is named `ferry-send`. After it is published, `npx ferry-send send report.pdf` does the same thing.
+The package in `cli/` is published on npm as [`ferry-send`](https://www.npmjs.com/package/ferry-send), so `npx ferry-send send report.pdf` works with no clone.
 
 The build reads `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_SITE_URL` from `.env.local` and uses them as defaults. `--server` and `--site` override them. See [cli/README.md](cli/README.md) for every command and option.
 
@@ -280,6 +286,8 @@ npm --prefix extension run build   # load extension/dist in chrome://extensions
 npm --prefix extension run zip     # the file for the Chrome Web Store
 ```
 
+![The extension popup with the current page ready to send](docs/extension.png)
+
 A browser and a phone can remember each other once. After that, "Send to <phone>" seals the room details with the key the two devices share and leaves them for the phone, so no code is needed. See [extension/README.md](extension/README.md) for the permissions and the limits.
 
 ## HTTP API
@@ -313,11 +321,25 @@ E2E_FILES=/path/to/test-files npm run test:e2e                             # ter
 
 `E2E_FILES` holds `photo.bin` (a few MB), `movie.bin` (a few hundred MB) and a folder named `album` with a subfolder.
 
+`test:e2e` runs five suites:
+
+| Suite | What it checks |
+| --- | --- |
+| `tests/e2e.mjs` | Transfers between browsers: QR, link and code joins, resume, large files, several devices |
+| `tests/e2e-extras.mjs` | Remembered devices, offline mode, the share target, bad input, text, sending again, history, and that a zip of received files opens |
+| `tests/cli.mjs` | The terminal sending to a browser and receiving from one |
+| `tests/agents.mjs` | The JSON mode, pipes, safety rules, pairing, and two MCP servers sending to each other |
+| `tests/extension.mjs` | The extension loaded in Chromium: a page, text and an image to a phone, a file back, and pairing |
+
+The extension suite needs a test build first: `FERRY_TEST_BRIDGE=http://localhost:4455 FERRY_SITE=http://localhost:3000 npm --prefix extension run build`.
+
 ## Deploy
 
 1. Set `NETWORK_SECRET` and `ANALYTICS_KEY` in the production Convex deployment, then run `npx convex deploy`.
 2. Deploy the Next.js app to Vercel or any Node host. Set the variables from the table above, with `NEXT_PUBLIC_CONVEX_URL` set to the production Convex address.
 3. Run `npm run og` after you change `NEXT_PUBLIC_SITE_URL`, so the share images show your address.
+4. Publish the command line tool with the production values built in: `NEXT_PUBLIC_CONVEX_URL=<production Convex URL> NEXT_PUBLIC_SITE_URL=<site> npm publish` in `cli/`. The publish step refuses to run without them.
+5. Build the extension with `FERRY_SERVER` and `FERRY_SITE` set, run `npm run zip` in `extension/`, and upload the zip to the Chrome Web Store. Set `NEXT_PUBLIC_CHROME_EXTENSION_URL` to the store page once it is live, and the site's extension page links to it.
 
 The API is served from the site's own domain. A rewrite in `next.config.ts` forwards `/v1/...` to the Convex HTTP actions.
 
@@ -362,7 +384,9 @@ The transfer screen shows whether a connection is direct or relayed.
 - The receiver needs free browser storage for the whole file. Saving copies it to the download folder, so a large file needs that space twice until the browser clears the first copy.
 - The history after a refresh shows what was sent and received. It cannot save a received file again, and it does not keep text notes. Offline mode has no history.
 - With no relay configured, a transfer fails or keeps reconnecting on networks that block direct connections. Mobile data is the common case.
-- A remembered device must have Ferry open to get the incoming-transfer prompt. There are no push notifications.
+- A remembered device must have Ferry open to get the incoming-transfer prompt, or run `ferry listen`. There are no push notifications.
+- The Chrome extension holds a received file in memory until Chrome saves it, so the limit is 2 GB a file.
+- An agent needs its own machine with Node.js 22. A chat assistant with no machine cannot send files, because Ferry has no server that holds a file.
 - "On your network now" matches devices by public IP address. On a network that many strangers share, turn it off with the checkbox on the transfer screen.
 - The privacy policy and terms describe what the code does. Have them reviewed before you run a public instance of your own.
 

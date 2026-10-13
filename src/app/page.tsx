@@ -326,6 +326,9 @@ export default function HomePage() {
             <a href="/offline" className="pill h-10 border border-paper px-6 text-[0.8125rem] hover:bg-white/10">
               No internet? Offline mode
             </a>
+            <a href="/extension" className="pill h-10 border border-paper px-6 text-[0.8125rem] hover:bg-white/10">
+              Chrome extension
+            </a>
           </div>
           <ReceivePanel />
         </div>

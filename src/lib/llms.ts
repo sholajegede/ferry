@@ -18,7 +18,7 @@ export function llmsIndex() {
 - [Send or receive files](${site.url}/): start a transfer, then connect the other device with a QR code, a 6-digit code or a link
 - [Offline mode](${site.url}/offline): send between two devices on the same Wi-Fi or hotspot with no internet
 - [Command line and HTTP API](${site.url}/developers): \`npx ${site.cliPackage} send <files>\` and \`npx ${site.cliPackage} receive <code>\`
-- [Chrome extension](${site.repo}/tree/main/extension): send the current page, a link, selected text or an image to a phone
+- [Chrome extension](${site.url}/extension): send the current page, a link, selected text or an image to a phone with one click, and get files back
 - [For AI agents](${site.url}/agents): an MCP server (\`npx -y ${site.cliPackage} mcp --root <folder>\`) and a JSON command line
 
 ## If you are an agent

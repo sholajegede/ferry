@@ -81,6 +81,7 @@ const columns: { title: string; links: { label: string; href: string; plain?: bo
       { label: "Send files", href: "/#send" },
       { label: "Receive files", href: "/#receive" },
       { label: "Offline mode", href: "/offline", plain: true },
+      { label: "Chrome extension", href: "/extension" },
       { label: "How it works", href: "/#how-it-works" },
     ],
   },

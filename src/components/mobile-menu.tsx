@@ -14,6 +14,7 @@ const links = [
   { label: "Compare", href: "/compare" },
   { label: "Developers", href: "/developers" },
   { label: "For AI agents", href: "/agents" },
+  { label: "Chrome extension", href: "/extension" },
 ];
 
 export function MobileMenu() {

@@ -77,6 +77,7 @@ export const featureList = [
   "Transfers resume after a dropped connection",
   "Offline mode on the same Wi-Fi or hotspot",
   "Up to 16 devices in one transfer",
-  "Command line tool and HTTP API",
+  "Command line tool, MCP server for AI agents, and HTTP API",
+  "Chrome extension that sends the current page to a phone",
   "Open source under the MIT licence",
 ];
