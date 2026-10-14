@@ -290,7 +290,7 @@ dialog::backdrop {
   margin-bottom: 0.375rem;
 }
 
-.prose-doc a {
+.prose-doc a:not(.pill) {
   color: var(--sea-deep);
   text-decoration: underline;
   text-underline-offset: 3px;
