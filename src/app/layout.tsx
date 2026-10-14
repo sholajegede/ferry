@@ -6,6 +6,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "./globals.css";
 import { Background } from "@/components/background";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
+import { ScrollToTop } from "@/components/scroll-to-top";
 import { FeedbackProvider } from "@/components/ui";
 import { site } from "@/lib/site";
 
@@ -84,6 +85,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteHeader />
           <main id="main">{children}</main>
           <SiteFooter />
+          <ScrollToTop />
           <Suspense fallback={null}>
             <Background />
           </Suspense>
