@@ -2,6 +2,7 @@ import { pageMeta } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata = pageMeta({
+  image: "privacy",
   title: "Privacy policy",
   description: `What ${site.name} stores, what it never receives, and how long data is kept.`,
   path: "/privacy",

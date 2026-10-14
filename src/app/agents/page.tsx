@@ -3,7 +3,7 @@ import { breadcrumbs, JsonLd, pageMeta } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata = pageMeta({
-  image: "developers",
+  image: "agents",
   title: "For AI agents: MCP server and JSON command line",
   description: `Let an AI agent send files to a person's phone, get files from them, or pass files to another agent with ${site.name}. MCP server and a JSON command line.`,
   path: "/agents",

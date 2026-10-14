@@ -1,4 +1,4 @@
-import type { OgTone } from "./og";
+export type OgTone = "purple" | "cream" | "night" | "green" | "peach";
 
 export const checked = "October 2026";
 

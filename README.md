@@ -172,7 +172,7 @@ Each frame carries a 16-byte file ID and the byte offset of its payload. The rec
 
 **Usage statistics without identities.** The admin page shows countries, device types and file types. Events store a visitor code that changes every day, and never a file name, a device ID or an IP address. They are deleted after 120 days.
 
-**Share images are files, not routes.** `npm run og` renders the preview images to `public/og/`. Social crawlers fetch a plain PNG with a known size, which is more reliable than an image rendered on request.
+**Share images are files, not routes.** `npm run og` renders one preview image for each page to `public/og/` with Chromium, from HTML in the site's own fonts and colours. Social crawlers fetch a plain PNG with a known size, which is more reliable than an image rendered on request.
 
 **Tests call the real backend functions.** The browser tests run real WebRTC transfers between several Chromium windows and the CLI. A small bridge runs the Convex functions through `convex-test`, so the tests need no deployment.
 

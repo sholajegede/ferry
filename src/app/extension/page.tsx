@@ -3,7 +3,7 @@ import { breadcrumbs, JsonLd, pageMeta } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata = pageMeta({
-  image: "developers",
+  image: "extension",
   title: "Ferry for Chrome: send this page to your phone",
   description: `Send the page you are on, a link, selected text or an image from Chrome to your phone with one click, and get files back. ${site.name} for Chrome is free and end-to-end encrypted.`,
   path: "/extension",

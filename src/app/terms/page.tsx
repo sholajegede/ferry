@@ -3,6 +3,7 @@ import { pageMeta } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata = pageMeta({
+  image: "terms",
   title: "Terms of use",
   description: `The terms for using ${site.name}.`,
   path: "/terms",
