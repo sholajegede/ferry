@@ -212,7 +212,7 @@ Then open `https://<your computer's IP>:3000` on the phone and accept the self-s
 | `ANALYTICS_KEY` | Web app and Convex | Lets the admin page read usage statistics |
 | `ADMIN_PASSWORD` | Web app | Password for `/admin`, 12 characters or more |
 | `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` | Web app | Shown on the privacy and terms pages |
-| `NEXT_PUBLIC_CHROME_EXTENSION_URL` | Web app | The Chrome Web Store page, linked from `/extension` |
+| `NEXT_PUBLIC_CHROME_EXTENSION_URL` | Web app | Your own Chrome Web Store page. The default is the public Ferry listing |
 | `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN` | Convex | Optional Cloudflare relay |
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Convex | Optional relay on any TURN server |
 
@@ -286,6 +286,8 @@ npm --prefix extension run build   # load extension/dist in chrome://extensions
 npm --prefix extension run zip     # the file for the Chrome Web Store
 ```
 
+[Install it from the Chrome Web Store](https://chromewebstore.google.com/detail/ferry/mggakheimcpfjdgendelnbgcagakmngf).
+
 ![The extension popup with the current page ready to send](docs/extension.png)
 
 A browser and a phone can remember each other once. After that, "Send to <phone>" seals the room details with the key the two devices share and leaves them for the phone, so no code is needed. See [extension/README.md](extension/README.md) for the permissions and the limits.
@@ -339,7 +341,7 @@ The extension suite needs a test build first: `FERRY_TEST_BRIDGE=http://localhos
 2. Deploy the Next.js app to Vercel or any Node host. Set the variables from the table above, with `NEXT_PUBLIC_CONVEX_URL` set to the production Convex address.
 3. Run `npm run og` after you change `NEXT_PUBLIC_SITE_URL`, so the share images show your address.
 4. Publish the command line tool with the production values built in: `NEXT_PUBLIC_CONVEX_URL=<production Convex URL> NEXT_PUBLIC_SITE_URL=<site> npm publish` in `cli/`. The publish step refuses to run without them.
-5. Build the extension with `FERRY_SERVER` and `FERRY_SITE` set, run `npm run zip` in `extension/`, and upload the zip to the Chrome Web Store. Set `NEXT_PUBLIC_CHROME_EXTENSION_URL` to the store page once it is live, and the site's extension page links to it.
+5. Build the extension with `FERRY_SERVER` and `FERRY_SITE` set, run `npm run zip` in `extension/`, and upload the zip to the Chrome Web Store. Set `NEXT_PUBLIC_CHROME_EXTENSION_URL` to your store page, so the site's extension page links to it.
 
 The API is served from the site's own domain. A rewrite in `next.config.ts` forwards `/v1/...` to the Convex HTTP actions.
 

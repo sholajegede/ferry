@@ -2,6 +2,8 @@
 
 Send the page you are on, a link, selected text or an image to your phone with one click, and get files and text back from it. It uses the same encrypted, device-to-device protocol as the [Ferry](https://ferry.sholajegede.com) web app. Nothing is uploaded.
 
+[Install it from the Chrome Web Store](https://chromewebstore.google.com/detail/ferry/mggakheimcpfjdgendelnbgcagakmngf).
+
 ## What it does
 
 - **Send this page.** Click the Ferry icon. Scan the QR code with your phone, or type the 6-digit code at the Ferry site.

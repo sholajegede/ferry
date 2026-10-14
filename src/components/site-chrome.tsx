@@ -41,7 +41,7 @@ export function SiteHeader() {
               <Mark />
               <span className="lowercase">{site.name}</span>
             </Link>
-            <nav aria-label="Main" className="hidden items-center md:flex">
+            <nav aria-label="Main" className="hidden items-center lg:flex">
               <Link href="/#how-it-works" className={linkClass}>
                 How it works
               </Link>
@@ -56,6 +56,9 @@ export function SiteHeader() {
               </Link>
               <Link href="/developers" className={linkClass}>
                 Developers
+              </Link>
+              <Link href="/extension" className={linkClass}>
+                Chrome extension
               </Link>
             </nav>
           </div>
